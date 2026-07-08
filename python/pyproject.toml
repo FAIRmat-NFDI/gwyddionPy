@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "gwybridge"
+name = "gwyddionpy"
 version = "0.1.0.dev0"
 description = "Read any Gwyddion-supported SPM raw file into NumPy via the gwyconvert helper"
 readme = "README.md"
@@ -20,7 +20,7 @@ hdf5 = ["h5py>=3.0"]
 test = ["pytest>=7", "h5py>=3.0", "pooch>=1.6"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/gwybridge"]
+packages = ["src/gwyddionpy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

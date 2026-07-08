@@ -1,6 +1,6 @@
-"""End-to-end tests against real vendor files in gwybridge/test-data/.
+"""End-to-end tests against real vendor files in gwyddionpy/test-data/.
 
-Need a built gwyconvert (GWYBRIDGE_CONVERT or PATH) and the sample files
+Need a built gwyconvert (GWYDDIONPY_CONVERT or PATH) and the sample files
 (see test-data/README.md for provenance and re-fetch commands). Both are
 skipped cleanly when absent, so the offline unit suite stays green.
 """
@@ -9,9 +9,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import gwybridge
-from gwybridge._errors import ConverterNotFoundError
-from gwybridge._run import find_converter
+import gwyddionpy
+from gwyddionpy._errors import ConverterNotFoundError
+from gwyddionpy._run import find_converter
 
 TEST_DATA = Path(__file__).resolve().parents[2] / "test-data"
 
@@ -43,7 +43,7 @@ def test_real_file_parses(name, module, nchannels):
     if not path.is_file():
         pytest.skip(f"sample file missing: {path} (see test-data/README.md)")
 
-    data = gwybridge.load(path)
+    data = gwyddionpy.load(path)
     assert data.source_format == module
     assert len(data.channels) == nchannels
     for channel in data.channels.values():
@@ -54,12 +54,12 @@ def test_real_file_parses(name, module, nchannels):
 
 
 def test_spectroscopy_file_loads_with_zero_channels():
-    # Nanonis .dat holds graph/spectra objects; the gwybridge model only
+    # Nanonis .dat holds graph/spectra objects; the gwyddionpy model only
     # extracts image channels so far (TODO.md: spectra/volume support).
     path = TEST_DATA / "Bias-Spectroscopy002.dat"
     if not path.is_file():
         pytest.skip(f"sample file missing: {path}")
-    data = gwybridge.load(path)
+    data = gwyddionpy.load(path)
     assert data.source_format == "nanonis_spec"
     assert data.channels == {}
 
@@ -68,5 +68,5 @@ def test_unsupported_format_raises():
     bogus = TEST_DATA / "README.md"  # text file, no module claims it
     if not bogus.is_file():
         pytest.skip("test-data/README.md missing")
-    with pytest.raises(gwybridge.UnsupportedFormatError):
-        gwybridge.load(bogus)
+    with pytest.raises(gwyddionpy.UnsupportedFormatError):
+        gwyddionpy.load(bogus)

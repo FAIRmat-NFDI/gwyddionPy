@@ -51,7 +51,7 @@ def write(data, path, compression: str = "gzip",
         import h5py
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
-            "HDF5 export needs h5py: pip install 'gwybridge[hdf5]'"
+            "HDF5 export needs h5py: pip install 'gwyddionpy[hdf5]'"
         ) from exc
 
     with h5py.File(path, "w") as f:

@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
-import gwybridge
+import gwyddionpy
 
 h5py = pytest.importorskip("h5py")
 
 
 def test_hdf5_round_trip(two_channel_gwy, tmp_path):
-    data = gwybridge.load(two_channel_gwy)
+    data = gwyddionpy.load(two_channel_gwy)
     out = tmp_path / "out.h5"
     data.to_hdf5(out)
 
@@ -34,7 +34,7 @@ def test_hdf5_hierarchical_metadata(tmp_path):
                    "Samps/line": "512",
                    "Scan Rate": "1.0"}}],
     )
-    data = gwybridge.load(path)
+    data = gwyddionpy.load(path)
     out = tmp_path / "out.h5"
     data.to_hdf5(out)
     with h5py.File(out) as f:
@@ -45,7 +45,7 @@ def test_hdf5_hierarchical_metadata(tmp_path):
 
 
 def test_hdf5_flat_metadata_option(two_channel_gwy, tmp_path):
-    data = gwybridge.load(two_channel_gwy)
+    data = gwyddionpy.load(two_channel_gwy)
     out = tmp_path / "flat.h5"
     data.to_hdf5(out, hierarchical_meta=False)
     with h5py.File(out) as f:
@@ -55,11 +55,11 @@ def test_hdf5_flat_metadata_option(two_channel_gwy, tmp_path):
 
 
 def test_gwy_export_round_trip(two_channel_gwy, tmp_path):
-    data = gwybridge.load(two_channel_gwy)
+    data = gwyddionpy.load(two_channel_gwy)
     out = tmp_path / "back.gwy"
     data.to_gwy(out)
 
-    again = gwybridge.load(out)  # .gwy loads without a converter
+    again = gwyddionpy.load(out)  # .gwy loads without a converter
     assert list(again.channels) == ["Height", "Phase"]
     height = again.channels["Height"]
     np.testing.assert_allclose(height.data, data.channels["Height"].data)
@@ -74,7 +74,7 @@ def test_hdf5_channel_name_with_slash(tmp_path):
 
     path = make_gwy(tmp_path / "slash.gwy",
                     [{"name": "Amplitude/Error", "data": np.zeros((2, 2))}])
-    data = gwybridge.load(path)
+    data = gwyddionpy.load(path)
     out = tmp_path / "out.h5"
     data.to_hdf5(out)
     with h5py.File(out) as f:

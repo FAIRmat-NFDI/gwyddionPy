@@ -1,7 +1,7 @@
 """Export GwyData back to a Gwyddion-native .gwy file.
 
 The result opens directly in the Gwyddion GUI and round-trips through
-``gwybridge.load()``. Written with the pure-Python ``gwyfile`` package —
+``gwyddionpy.load()``. Written with the pure-Python ``gwyfile`` package —
 no converter binary involved.
 """
 from __future__ import annotations

@@ -5,9 +5,9 @@ formats) into Python: NumPy arrays plus metadata dictionaries — usable as a
 dependency of Python libraries and for NOMAD/FAIRmat data ingestion.
 
 ```python
-import gwybridge
+import gwyddionpy
 
-data = gwybridge.load("scan.spm")         # Bruker, JPK, WSxM, Igor, ...
+data = gwyddionpy.load("scan.spm")         # Bruker, JPK, WSxM, Igor, ...
 data.channels["Height"].data              # numpy array, physical values
 data.channels["Height"].si_unit_z         # "m"
 data.metadata                             # vendor metadata dict
@@ -19,7 +19,7 @@ data.to_gwy("scan.gwy")                   # back to Gwyddion-native format
 
 A small headless C helper, `gwyconvert` (in `converter/`), links Gwyddion's
 libraries and converts any supported raw file to Gwyddion's native `.gwy`
-format; the pure-Python package `gwybridge` (in `python/`) runs it as a
+format; the pure-Python package `gwyddionpy` (in `python/`) runs it as a
 subprocess and parses the result into NumPy. No compiled Python extension —
 Python version updates cannot break it.
 
