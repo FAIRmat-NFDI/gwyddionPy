@@ -1,0 +1,3 @@
+[submodule "vendor/gwyddion"]
+	path = vendor/gwyddion
+	url = https://github.com/RubelMozumder/gwyddion-fork.git
