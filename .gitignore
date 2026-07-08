@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.pytest_cache/
+
+# Built converter binary
+converter/gwyconvert
+converter/*.o
+
+# Test data: binaries are fetched, not committed (see test-data/README.md)
+test-data/*
+!test-data/README.md
+
+# Local working notes — never pushed upstream
+CONTEXT.md
+TODO.md
+CLAUDE.md
+.claude/
