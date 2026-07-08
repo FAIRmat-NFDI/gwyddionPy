@@ -34,7 +34,7 @@ Full-size real files are **not committed**. They are downloaded on demand with
 [`pooch`](https://www.fatiando.org/pooch/) — the standard scientific-Python
 test-data fetcher (used by SciPy, scikit-image): a registry in the test suite
 maps `filename → SHA256 → URL`, downloads verify the hash, and files cache in
-`~/.cache/gwybridge-tests/` so each machine downloads once.
+`~/.cache/gwyddionpy-tests/` so each machine downloads once.
 
 Hosting: upload the corpus (starting with our two 16 MB Bruker files) to a
 **Zenodo record** (DOI, permanent, versioned — fits the NOMAD/FAIR ethos) or,

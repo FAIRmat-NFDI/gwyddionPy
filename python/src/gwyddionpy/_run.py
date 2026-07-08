@@ -10,13 +10,13 @@ from typing import Optional
 
 from ._errors import ConversionError, ConverterNotFoundError, UnsupportedFormatError
 
-ENV_VAR = "GWYBRIDGE_CONVERT"
+ENV_VAR = "GWYDDIONPY_CONVERT"
 BINARY_NAME = "gwyconvert"
 
 
 def find_converter(explicit: Optional[str] = None) -> str:
     """Resolve the gwyconvert binary: explicit argument, then the
-    GWYBRIDGE_CONVERT environment variable, then PATH."""
+    GWYDDIONPY_CONVERT environment variable, then PATH."""
     if explicit is not None:
         if Path(explicit).is_file():
             return str(explicit)
@@ -36,7 +36,7 @@ def find_converter(explicit: Optional[str] = None) -> str:
 
     raise ConverterNotFoundError(
         f"cannot find {BINARY_NAME!r}: set {ENV_VAR} or add it to PATH "
-        "(build instructions: gwybridge/docs/BUILD.md)"
+        "(build instructions: gwyddionpy/docs/BUILD.md)"
     )
 
 

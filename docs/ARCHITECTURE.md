@@ -1,6 +1,6 @@
-# gwybridge Architecture
+# gwyddionpy Architecture
 
-gwybridge makes Gwyddion's ~148 SPM file-format parsers usable from Python.
+gwyddionpy makes Gwyddion's ~148 SPM file-format parsers usable from Python.
 It deliberately contains **two small components on either side of a process
 boundary**, instead of one big binding layer.
 
@@ -25,11 +25,11 @@ optional source submodule), which already performs
 GUI-less file loading (GTK libraries must be installed, but no display is
 required).
 
-### 2. `gwybridge` (Python, `python/`)
+### 2. `gwyddionpy` (Python, `python/`)
 
 A pure-Python package (no compiled extension) that:
 
-1. locates `gwyconvert` (env var `GWYBRIDGE_CONVERT`, then `$PATH`),
+1. locates `gwyconvert` (env var `GWYDDIONPY_CONVERT`, then `$PATH`),
 2. runs it as a subprocess into a temporary `.gwy` file,
 3. parses that file with the PyPI [`gwyfile`](https://pypi.org/project/gwyfile/)
    package into NumPy arrays,

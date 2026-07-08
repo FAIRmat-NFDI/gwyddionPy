@@ -1,4 +1,4 @@
-"""Parsing a .gwy file (serialized GwyContainer) into the gwybridge model.
+"""Parsing a .gwy file (serialized GwyContainer) into the gwyddionpy model.
 
 Relies on the pure-Python ``gwyfile`` package. Container layout, as written
 by Gwyddion: ``/N/data`` (GwyDataField), ``/N/data/title`` (str),

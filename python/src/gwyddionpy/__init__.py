@@ -1,4 +1,4 @@
-"""gwybridge — read any Gwyddion-supported SPM raw file into NumPy.
+"""gwyddionpy — read any Gwyddion-supported SPM raw file into NumPy.
 
 Pipeline: raw file -> gwyconvert subprocess -> .gwy -> gwyfile -> GwyData.
 Native .gwy inputs are parsed directly, no converter needed.
@@ -12,7 +12,7 @@ from typing import Optional
 from ._errors import (
     ConversionError,
     ConverterNotFoundError,
-    GwybridgeError,
+    GwyddionPyError,
     UnsupportedFormatError,
 )
 from ._model import Channel, GwyData
@@ -26,7 +26,7 @@ __all__ = [
     "parse_gwy",
     "GwyData",
     "Channel",
-    "GwybridgeError",
+    "GwyddionPyError",
     "ConverterNotFoundError",
     "ConversionError",
     "UnsupportedFormatError",
@@ -37,7 +37,7 @@ def load(path, *, converter: Optional[str] = None) -> GwyData:
     """Load a raw SPM file of any Gwyddion-supported format.
 
     ``converter`` optionally overrides gwyconvert discovery (otherwise the
-    GWYBRIDGE_CONVERT environment variable and PATH are searched).
+    GWYDDIONPY_CONVERT environment variable and PATH are searched).
     """
     path = Path(path)
     if not path.is_file():
@@ -46,7 +46,7 @@ def load(path, *, converter: Optional[str] = None) -> GwyData:
     if path.suffix.lower() == ".gwy":
         return parse_gwy(path)
 
-    with tempfile.TemporaryDirectory(prefix="gwybridge-") as tmpdir:
+    with tempfile.TemporaryDirectory(prefix="gwyddionpy-") as tmpdir:
         converted = Path(tmpdir, "converted.gwy")
         module = run_converter(path, converted, converter=converter)
         data = parse_gwy(converted)

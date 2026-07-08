@@ -14,14 +14,14 @@ way** (Decision D1 in ../CONTEXT.md).
 `gwyconvert` uses only long-stable APIs (`gwy_file_load`, `gwy_file_save`,
 GwyContainer serialization) that have not changed materially in 15+ years.
 On a new Gwyddion release: rebuild the converter, run the test suite, done.
-New file formats added upstream are inherited **for free** — no gwybridge
+New file formats added upstream are inherited **for free** — no gwyddionpy
 change needed.
 
 ## Dependency policy
 
 - `gwyfile` (PyPI): small and rarely updated. If it ever becomes incompatible
   or unmaintained, vendor the needed subset (it is MIT-licensed) into
-  `gwybridge/_gwyfile/` — note it in CHANGELOG.md.
+  `gwyddionpy/_gwyfile/` — note it in CHANGELOG.md.
 - `numpy`: follow NEP 29 / SPEC 0 support windows; avoid private APIs.
 
 ## Licensing constraints (do not accidentally violate)

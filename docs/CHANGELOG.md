@@ -5,13 +5,19 @@ follow [SemVer](https://semver.org/) once the Python package exists.
 
 ## [Unreleased]
 
+### Changed
+- 2026-07-08: **renamed** distribution/import `gwybridge` → `gwyddionpy`,
+  unifying with the repository name. Also renamed: env var
+  `GWYBRIDGE_CONVERT` → `GWYDDIONPY_CONVERT`, base exception
+  `GwybridgeError` → `GwyddionPyError`. The converter binary stays
+  `gwyconvert`.
+
 ### Added
 - 2026-07-08: project migrated from the `gwybridge/` subdirectory of the
   gwyddion-fork repository to the standalone **FAIRmat-NFDI/gwyddionPy**
   repository. Licensing settled: repository Apache-2.0, `converter/`
   GPL-2.0-or-later (links Gwyddion; see converter/COPYING). Gwyddion source
-  available as optional submodule `vendor/gwyddion`. Package/import name
-  stays `gwybridge` for now (rename decision still open).
+  available as optional submodule `vendor/gwyddion`.
 - 2026-07-07: multi-vendor sample corpus (JPK, WSxM, Igor, Nanonis) fetched
   from open test suites into test-data/ (untracked; provenance in
   test-data/README.md) + tests/test_real_files.py. Suite: 27 tests.
@@ -36,7 +42,8 @@ follow [SemVer](https://semver.org/) once the Python package exists.
   through the Python package — 8 channels, 512×512 float64, physical units,
   875 metadata entries, HDF5 export. Build gotchas documented in
   TROUBLESHOOTING.md (gtkglext headers avoided; `~/.local/bin/as` shadowing).
-- 2026-07-07: Python package `gwybridge` 0.1.0.dev0 (src layout, hatchling):
+- 2026-07-07: Python package 0.1.0.dev0, then named `gwybridge` (src layout,
+  hatchling):
   `load()`, `list_formats()`, `parse_gwy()`, `GwyData`/`Channel` model, typed
   exceptions, HDF5 export (`[hdf5]` extra). Native `.gwy` inputs bypass the
   converter. Test suite: 16 tests, all passing, mock-free (fixtures are real

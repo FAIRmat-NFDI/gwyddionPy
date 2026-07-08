@@ -1,4 +1,4 @@
-# Building gwybridge
+# Building gwyddionpy
 
 Two things get built/installed: the C converter `gwyconvert` and the Python
 package. The Python package is pure Python — only the converter needs a C
@@ -53,16 +53,16 @@ make check      # smoke test: --list-formats runs and prints JSON
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e python/                    # editable, for development
-export GWYBRIDGE_CONVERT=$PWD/converter/gwyconvert   # if not on PATH
+export GWYDDIONPY_CONVERT=$PWD/converter/gwyconvert   # if not on PATH
 ```
 
 For end users the sequence is: install Gwyddion (apt/conda/installer), install
-`gwyconvert` somewhere on `$PATH`, then `pip install gwybridge`.
+`gwyconvert` somewhere on `$PATH`, then `pip install gwyddionpy`.
 
 ## Verifying the full pipeline
 
 ```bash
-python -c "import gwybridge; d = gwybridge.load('sample.spm'); print(list(d.channels))"
+python -c "import gwyddionpy; d = gwyddionpy.load('sample.spm'); print(list(d.channels))"
 ```
 
 Sample files: see `test-data/README.md` (provenance + re-fetch commands).

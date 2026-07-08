@@ -1,4 +1,4 @@
-# Using gwybridge
+# Using gwyddionpy
 
 > Status note: sections are marked *(implemented)* / *(planned)* and the
 > marks are updated as work lands.
@@ -19,9 +19,9 @@ Native `.gwy` files load directly without the converter. All other formats
 go through `gwyconvert`.
 
 ```python
-import gwybridge
+import gwyddionpy
 
-data = gwybridge.load("scan.spm")     # any of ~148 Gwyddion-supported formats
+data = gwyddionpy.load("scan.spm")     # any of ~148 Gwyddion-supported formats
 ```
 
 `load()` returns a `GwyData` object:
@@ -44,12 +44,12 @@ Each `Channel`:
 Capability query:
 
 ```python
-gwybridge.list_formats()   # [{"name": "nanoscope", "description": ..., "extensions": [...]}, ...]
+gwyddionpy.list_formats()   # [{"name": "nanoscope", "description": ..., "extensions": [...]}, ...]
 ```
 
 Errors are typed: `ConverterNotFoundError` (gwyconvert not installed/found),
 `UnsupportedFormatError`, `ConversionError` (parser failed; carries stderr).
-The converter is located via the `GWYBRIDGE_CONVERT` environment variable
+The converter is located via the `GWYDDIONPY_CONVERT` environment variable
 first, then `$PATH`.
 
 ## Exports *(HDF5 + .gwy implemented; NeXus planned)*
@@ -67,5 +67,5 @@ groups (`meta/group 2/…`, `meta/Samps/…`); plain keys stay as attributes of
 `meta` itself.
 
 NeXus/NXspm output is produced through the pynxtools-spm reader adapter, not
-by gwybridge itself — gwybridge supplies the dict, pynxtools writes the .nxs
+by gwyddionpy itself — gwyddionpy supplies the dict, pynxtools writes the .nxs
 (which is itself an HDF5 file with the NeXus hierarchy).

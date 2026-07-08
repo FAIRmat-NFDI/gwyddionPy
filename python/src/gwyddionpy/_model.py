@@ -1,4 +1,4 @@
-"""Data model returned by gwybridge: GwyData holding named Channels."""
+"""Data model returned by gwyddionpy: GwyData holding named Channels."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
