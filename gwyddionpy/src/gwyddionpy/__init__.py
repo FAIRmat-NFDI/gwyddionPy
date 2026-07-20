@@ -6,6 +6,7 @@ Native .gwy inputs are parsed directly, no converter needed.
 from __future__ import annotations
 
 import tempfile
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Optional
 
@@ -19,7 +20,10 @@ from ._model import Channel, GwyData
 from ._parse import parse_gwy
 from ._run import query_formats, run_converter
 
-__version__ = "0.1.0.dev0"
+try:
+    __version__ = version("gwyddionpy")
+except PackageNotFoundError:  # pragma: no cover — not installed, e.g. running from a source checkout
+    __version__ = "unknown"
 __all__ = [
     "load",
     "list_formats",

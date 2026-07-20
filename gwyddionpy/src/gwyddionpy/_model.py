@@ -52,3 +52,13 @@ class GwyData:
         from .export.gwy import write
 
         write(self, path)
+
+    def to_dict(self, hierarchical_meta: bool = True) -> dict:
+        """Return channels + metadata as a plain Python dict (no file I/O),
+        structurally mirroring ``to_hdf5`` — same channel fields, same
+        sanitized-name keying, same vendor-metadata grouping. Matches the
+        shape pynxtools-spm's reader adapter is expected to consume (see
+        docs/EXTENDING.md)."""
+        from .export.dict import to_dict
+
+        return to_dict(self, hierarchical_meta=hierarchical_meta)
