@@ -1,0 +1,45 @@
+name: pytest
+
+on:
+  push:
+    branches: [main, "*"]
+  pull_request:
+    branches: [main, "*"]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Route 1 (docs/BUILD.md): system Gwyddion dev package. Its .pc file
+      # Requires glib/gtk2/fftw3 dev files that are not pulled in
+      # automatically.
+      - name: Install Gwyddion dev headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgwyddion20-dev libgtk2.0-dev libfftw3-dev pkg-config build-essential
+
+      - name: Build gwyconvert
+        run: |
+          make -C converter
+          make -C converter check
+
+      - name: Install uv and set the python version to ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install gwyddionpy
+        run: uv pip install "./gwyddionpy[test]"
+
+      - name: Test with pytest
+        env:
+          GWYDDIONPY_CONVERT: ${{ github.workspace }}/converter/gwyconvert
+        run: pytest gwyddionpy/tests
