@@ -1,0 +1,41 @@
+name: Build and publish gwyconvert
+
+# Same trigger as publish.yml (OQ7c: converter releases share the Python
+# package's tag) — this workflow attaches gwyconvert-*.tar.gz assets to
+# the same GitHub Release, separate from the PyPI publish entirely.
+on:
+  release:
+    types: [published]
+
+jobs:
+  linux:
+    name: Build gwyconvert (linux-x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Builds Gwyddion itself from its official SourceForge release
+      # tarball (not the system libgwyddion20-dev used by pytest.yml) —
+      # see V1_IMPLEMENTATION.md for why: --without-gl drops the
+      # OpenGL/GLX/gtkglext dependency entirely, verified against a real
+      # conversion of a Bruker sample file through gwyddionpy.load().
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config curl patchelf \
+            libgtk2.0-dev libfftw3-dev libxml2-dev gettext
+
+      - name: Build, bundle, and package gwyconvert
+        run: converter/ci/build-linux.sh
+        env:
+          OUT_DIR: ${{ github.workspace }}/dist-converter
+
+      - name: Upload to the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            dist-converter/gwyconvert-linux-x86_64.tar.gz \
+            dist-converter/gwyconvert-linux-x86_64.tar.gz.sha256 \
+            --clobber

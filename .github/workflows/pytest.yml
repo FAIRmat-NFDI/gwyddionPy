@@ -17,9 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Route 1 (docs/BUILD.md): system Gwyddion dev package. Its .pc file
-      # Requires glib/gtk2/fftw3 dev files that are not pulled in
-      # automatically.
+      # System package build (docs/BUILD.md): system Gwyddion dev package.
+      # Its .pc file Requires glib/gtk2/fftw3 dev files that are not
+      # pulled in automatically.
       - name: Install Gwyddion dev headers
         run: |
           sudo apt-get update
