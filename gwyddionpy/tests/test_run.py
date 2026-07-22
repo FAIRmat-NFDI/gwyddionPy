@@ -67,13 +67,19 @@ def test_list_formats_reports_known_formats():
     """Verify gwyconvert reports a real, well-formed format registry.
 
     Guards against gwyconvert linking against a stub or empty module
-    registry instead of Gwyddion's actual ~150 file-format parsers — a
-    broken build could still exit 0 and return an empty or malformed list,
-    and this would be the only test to catch it.
+    registry instead of Gwyddion's actual file-format parsers — a broken
+    build could still exit 0 and return an empty or malformed list, and
+    this would be the only test to catch it.
     """
     formats = gwyddionpy.list_formats()
 
-    assert len(formats) ==170  # 150 formats last verified
+    # Not an exact count on purpose: the system-package build reports 170
+    # (Gwyddion 2.60), the source-tarball build converter/ci/build-*.sh
+    # uses reports 185 (Gwyddion 2.71) — both are legitimate, and the
+    # count will keep drifting as Gwyddion gains formats. > 100 is a
+    # floor that only a genuinely broken registry (this test's actual
+    # target) would fail.
+    assert len(formats) > 100
     names = {fmt["name"] for fmt in formats}
     assert "nanoscope" in names  # Bruker, exercised end-to-end in test_real_files.py
     assert "gwyfile" in names    # Gwyddion's own native format
