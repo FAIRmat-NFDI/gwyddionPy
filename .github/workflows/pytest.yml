@@ -7,7 +7,16 @@ on:
     branches: [main, "*"]
 
 jobs:
-  pytest:
+  # Two independent, parallel jobs (no `needs:` between them) exercising
+  # the two ways to get a working gwyconvert documented in docs/BUILD.md.
+  # Deliberately kept side by side rather than one replacing the other:
+  # pytest-source-tarball tests the same recipe the release binary uses
+  # (converter/ci/build-gwyddion.sh); pytest-system-package tests that the
+  # System package build path BUILD.md documents for local dev still
+  # actually works, since real contributors may still reach for it.
+
+  pytest-system-package:
+    name: pytest (system Gwyddion package)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -17,19 +26,72 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # System package build (docs/BUILD.md): system Gwyddion dev package.
-      # Its .pc file Requires glib/gtk2/fftw3 dev files that are not
-      # pulled in automatically.
-      - name: Install Gwyddion dev headers
+      # System package build (docs/BUILD.md). `gwyddion` itself — not
+      # just libgwyddion20-dev — is required: the actual file-format
+      # module plugins (~150-170 .so files gwyconvert loads at runtime
+      # via gwy_find_self_dir()) are packaged under the `gwyddion` binary
+      # package, not the -dev headers package (confirmed via `dpkg -S`;
+      # see V1_IMPLEMENTATION.md, 2026-07-22). Without it, gwyconvert
+      # builds and runs fine but silently registers zero formats.
+      - name: Install Gwyddion (system package)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libgwyddion20-dev libgtk2.0-dev libfftw3-dev pkg-config build-essential
+            libgwyddion20-dev gwyddion libgtk2.0-dev libfftw3-dev pkg-config build-essential
 
       - name: Build gwyconvert
         run: |
           make -C converter
           make -C converter check
+
+      - name: Install uv and set the python version to ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install gwyddionpy
+        run: uv pip install "./gwyddionpy[test]"
+
+      - name: Test with pytest
+        env:
+          GWYDDIONPY_CONVERT: ${{ github.workspace }}/converter/gwyconvert
+        run: pytest gwyddionpy/tests
+
+  pytest-source-tarball:
+    name: pytest (Gwyddion built from source tarball)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Builds Gwyddion itself from its official source tarball
+      # (converter/ci/build-gwyddion.sh — shared with build-converter.yml)
+      # instead of the system package (docs/BUILD.md's "System package
+      # build"). Deliberate: that apt-based path depends on Ubuntu's own
+      # package split, which already bit this project once — the actual
+      # file-format module plugins turned out to live in the `gwyddion`
+      # package, not `libgwyddion20-dev`, invisible on a dev machine that
+      # happened to have `gwyddion` installed already, real on a fresh CI
+      # runner (see V1_IMPLEMENTATION.md, 2026-07-22). Building from
+      # source ourselves — the same recipe the release binary uses —
+      # removes that whole class of risk, and tests closer to what
+      # actually ships.
+      - name: Install build dependencies for Gwyddion
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config curl libgtk2.0-dev libfftw3-dev libxml2-dev gettext
+
+      - name: Build Gwyddion + gwyconvert from source
+        env:
+          WORK_DIR: ${{ github.workspace }}/gwyddion-build
+          PREFIX: ${{ github.workspace }}/gwyddion-build/install
+          GWYCONVERT_OUT: ${{ github.workspace }}/converter/gwyconvert
+        run: converter/ci/build-gwyddion.sh
 
       - name: Install uv and set the python version to ${{ matrix.python-version }}
         uses: astral-sh/setup-uv@v5
