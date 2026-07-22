@@ -60,9 +60,26 @@ echo "== Smoke test (unbundled) =="
   "import json,sys; d=json.load(sys.stdin); assert len(d) > 100, d; print(f'{len(d)} formats OK')"
 
 echo "== Bundling runtime dependencies =="
+# Layout: gwyconvert (wrapper script) + lib/gwyconvert.real (the ELF) +
+# lib/*.so (bundled runtime deps, siblings of the ELF) + lib/gwyddion/
+# (Gwyddion's own file-format module plugins). The ELF's RPATH is $ORIGIN,
+# which now resolves correctly since everything lives in the same lib/ dir.
 BUNDLE_DIR="$BUILD_DIR/bundle"
 mkdir -p "$BUNDLE_DIR/lib"
-cp "$BUILD_DIR/gwyconvert" "$BUNDLE_DIR/gwyconvert"
+cp "$BUILD_DIR/gwyconvert" "$BUNDLE_DIR/lib/gwyconvert.real"
+
+# gwyconvert.c finds its format-parser plugins via gwy_find_self_dir(),
+# which on Unix uses a path *compiled into libgwyddion at Gwyddion's own
+# build time* (or the GWYDDION_LIBDIR env var, which overrides it — see
+# gwy_find_self_dir() in libgwyddion/gwyutils.c). That compiled-in path is
+# $PREFIX/lib, i.e. this script's own temporary build directory — which
+# won't exist once this script's trap deletes $WORK_DIR, let alone on
+# whoever downloads this tarball. Confirmed by hand (V1_IMPLEMENTATION.md):
+# without bundling this directory and pointing GWYDDION_LIBDIR at it,
+# gwyconvert runs fine (exit 0) and silently reports zero formats — the
+# "broken build could still exit 0" case test_run.py's
+# test_list_formats_reports_known_formats exists to catch.
+cp -r "$PREFIX/lib/gwyddion" "$BUNDLE_DIR/lib/gwyddion"
 
 # glibc's own pieces: never bundle these (see policy note above).
 EXCLUDE_RE='^(linux-vdso\.so|ld-linux|libc\.so|libm\.so|libpthread\.so|libdl\.so|librt\.so|libresolv\.so|libnsl\.so|libutil\.so)'
@@ -73,10 +90,21 @@ ldd "$BUILD_DIR/gwyconvert" | awk '{print $1, $3}' | while read -r name path; do
   cp -n "$path" "$BUNDLE_DIR/lib/"
 done
 
-patchelf --set-rpath '$ORIGIN/lib' "$BUNDLE_DIR/gwyconvert"
+patchelf --set-rpath '$ORIGIN' "$BUNDLE_DIR/lib/gwyconvert.real"
 for lib in "$BUNDLE_DIR"/lib/*.so*; do
   patchelf --set-rpath '$ORIGIN' "$lib"
 done
+
+cat > "$BUNDLE_DIR/gwyconvert" <<'WRAPPER'
+#!/bin/sh
+# Sets GWYDDION_LIBDIR so gwyconvert.real finds the bundled modules in
+# lib/gwyddion/modules/file/ instead of the (nonexistent, post-extraction)
+# path compiled in at CI build time. See build-linux.sh for the full story.
+here="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+export GWYDDION_LIBDIR="$here/lib"
+exec "$here/lib/gwyconvert.real" "$@"
+WRAPPER
+chmod +x "$BUNDLE_DIR/gwyconvert"
 
 echo "== Verifying the bundle is actually self-contained (env cleared) =="
 env -i "$BUNDLE_DIR/gwyconvert" --list-formats | python3 -c \
