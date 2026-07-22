@@ -18,3 +18,7 @@ class ConversionError(GwyddionPyError):
 
 class UnsupportedFormatError(ConversionError):
     """No Gwyddion file module could load the input file."""
+
+
+class ConverterFetchError(GwyddionPyError):
+    """Downloading/verifying/extracting a prebuilt gwyconvert release failed."""

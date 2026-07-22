@@ -24,11 +24,15 @@ classifiers = [
 dependencies = [
     "numpy>=1.22",
     "gwyfile>=0.3",
+    "platformdirs>=3.0",
 ]
 
 [project.urls]
 "Homepage" = "https://github.com/FAIRmat-NFDI/gwyddionPy"
 "Parent Project" = "https://github.com/FAIRmat-NFDI"
+
+[project.scripts]
+gwyddionpy-fetch-converter = "gwyddionpy._fetch_converter:_main"
 
 [project.optional-dependencies]
 hdf5 = ["h5py>=3.0"]

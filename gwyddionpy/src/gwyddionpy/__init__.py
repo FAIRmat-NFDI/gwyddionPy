@@ -12,10 +12,12 @@ from typing import Optional
 
 from ._errors import (
     ConversionError,
+    ConverterFetchError,
     ConverterNotFoundError,
     GwyddionPyError,
     UnsupportedFormatError,
 )
+from ._fetch_converter import ensure_converter
 from ._model import Channel, GwyData
 from ._parse import parse_gwy
 from ._run import query_formats, run_converter
@@ -28,12 +30,14 @@ __all__ = [
     "load",
     "list_formats",
     "parse_gwy",
+    "ensure_converter",
     "GwyData",
     "Channel",
     "GwyddionPyError",
     "ConverterNotFoundError",
     "ConversionError",
     "UnsupportedFormatError",
+    "ConverterFetchError",
 ]
 
 

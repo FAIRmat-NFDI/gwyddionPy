@@ -16,7 +16,8 @@ BINARY_NAME = "gwyconvert"
 
 def find_converter(explicit: Optional[str] = None) -> str:
     """Resolve the gwyconvert binary: explicit argument, then the
-    GWYDDIONPY_CONVERT environment variable, then PATH."""
+    GWYDDIONPY_CONVERT environment variable, then PATH, then a converter
+    previously fetched via ``gwyddionpy.ensure_converter()``."""
     if explicit is not None:
         if Path(explicit).is_file():
             return str(explicit)
@@ -34,9 +35,16 @@ def find_converter(explicit: Optional[str] = None) -> str:
     if found:
         return found
 
+    from ._fetch_converter import cached_converter_path
+
+    cached = cached_converter_path()
+    if cached is not None:
+        return str(cached)
+
     raise ConverterNotFoundError(
-        f"cannot find {BINARY_NAME!r}: set {ENV_VAR} or add it to PATH "
-        "(build instructions: gwyddionpy/docs/BUILD.md)"
+        f"cannot find {BINARY_NAME!r}: set {ENV_VAR}, add it to PATH, run "
+        "`gwyddionpy-fetch-converter` to download a prebuilt one, or see "
+        "build instructions in gwyddionpy/docs/BUILD.md"
     )
 
 
