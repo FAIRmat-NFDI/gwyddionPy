@@ -58,14 +58,20 @@ def _asset_name() -> str:
 
 def _release_tag() -> str:
     """The GitHub Release tag to fetch from: the installed package's own
-    version, or "latest" for dev/editable installs with no matching tag."""
+    version, or "latest" for dev/editable installs with no matching tag.
+
+    Release tags in this repo are "v"-prefixed (v0.0.1, ...) while the
+    setuptools-scm-derived package version is not (0.0.1) — confirmed by
+    hand 2026-07-22 (a fetch against the un-prefixed path 404'd against a
+    real v0.0.1 release). The "v" has to be added back here.
+    """
     try:
         installed = version("gwyddionpy")
     except PackageNotFoundError:
         return "latest"
     if "dev" in installed or "+" in installed:
         return "latest"
-    return installed
+    return f"v{installed}"
 
 
 def _base_url() -> str:

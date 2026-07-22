@@ -79,7 +79,7 @@ def test_list_formats_reports_known_formats():
     # count will keep drifting as Gwyddion gains formats. > 100 is a
     # floor that only a genuinely broken registry (this test's actual
     # target) would fail.
-    assert len(formats) > 100
+    assert len(formats) >= 170
     names = {fmt["name"] for fmt in formats}
     assert "nanoscope" in names  # Bruker, exercised end-to-end in test_real_files.py
     assert "gwyfile" in names    # Gwyddion's own native format

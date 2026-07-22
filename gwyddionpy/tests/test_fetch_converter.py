@@ -17,8 +17,11 @@ import pytest
 from gwyddionpy._errors import ConverterFetchError
 from gwyddionpy._fetch_converter import (
     BASE_URL_ENV_VAR,
+    GITHUB_REPO,
     _asset_name,
+    _base_url,
     _platform_tag,
+    _release_tag,
     cached_converter_path,
     ensure_converter,
 )
@@ -123,3 +126,24 @@ def test_unsupported_platform_raises(monkeypatch):
     monkeypatch.setattr("gwyddionpy._fetch_converter.platform.system", lambda: "Plan9")
     with pytest.raises(ConverterFetchError, match="no prebuilt gwyconvert"):
         _platform_tag()
+
+
+def test_release_tag_adds_v_prefix(monkeypatch):
+    # Release tags in this repo are "v"-prefixed (v0.0.1); the installed
+    # package's own version string is not (0.0.1) — a real bug (a 404
+    # against a real release) until this was caught by hand, 2026-07-22.
+    monkeypatch.setattr("gwyddionpy._fetch_converter.version", lambda name: "0.0.1")
+    assert _release_tag() == "v0.0.1"
+
+
+def test_release_tag_falls_back_to_latest_for_dev_versions(monkeypatch):
+    monkeypatch.setattr(
+        "gwyddionpy._fetch_converter.version", lambda name: "0.0.post1.dev3+g1234567"
+    )
+    assert _release_tag() == "latest"
+
+
+def test_base_url_targets_the_v_prefixed_release(monkeypatch):
+    monkeypatch.delenv(BASE_URL_ENV_VAR, raising=False)
+    monkeypatch.setattr("gwyddionpy._fetch_converter.version", lambda name: "0.0.1")
+    assert _base_url() == f"https://github.com/{GITHUB_REPO}/releases/download/v0.0.1"
