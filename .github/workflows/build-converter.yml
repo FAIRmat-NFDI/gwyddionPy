@@ -11,25 +11,54 @@ jobs:
   linux:
     name: Build gwyconvert (linux-x86_64)
     runs-on: ubuntu-latest
+    # Built inside Rocky Linux 8 (glibc 2.28 — the same floor as the
+    # manylinux_2_28 wheel standard) rather than on the runner's own
+    # Ubuntu: glibc is forward-compatible only, so the bundle runs on
+    # anything with glibc >= 2.28 (RHEL/Rocky/Alma 8+, Debian 10+,
+    # Ubuntu 18.10+). A plain runner can't get anywhere near that —
+    # ubuntu-22.04 is the oldest hosted image (glibc 2.35), which a real
+    # user confirmed 2026-07-22 already excludes RHEL 9 (2.34); an
+    # ubuntu-latest (24.04, glibc 2.39) build failed outright on Debian
+    # bookworm (2.36). Verified locally in Docker 2026-07-22: this exact
+    # recipe's bundle reports the same 170 formats on bookworm, Rocky 9,
+    # and Ubuntu 20.04, incl. a real Bruker .spm conversion through
+    # gwyddionpy.load() on bookworm. Not the official manylinux image on
+    # purpose: it ships none of GTK2/GLib/FFTW/Pango (we'd be building
+    # that whole stack from source); EL8 still packages all of them.
+    container: rockylinux:8
     steps:
+      # Everything below runs INSIDE the container, so dependencies (and
+      # the gh CLI for the upload step) come from dnf, not the runner
+      # image. Repo notes: fftw-devel lives in PowerTools (CRB), patchelf
+      # in EPEL, gh in GitHub's own rpm repo.
+      - name: Install build dependencies
+        run: |
+          dnf -y install dnf-plugins-core
+          dnf config-manager --set-enabled powertools
+          dnf -y install epel-release
+          dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+          dnf -y install \
+            gcc-toolset-12 make pkgconf-pkg-config curl xz tar gzip bzip2 \
+            python3 patchelf gawk file findutils diffutils git gh \
+            gtk2-devel fftw-devel libxml2-devel gettext
+
       - uses: actions/checkout@v4
 
       # Builds Gwyddion itself from its official SourceForge release
-      # tarball (not the system libgwyddion20-dev used by pytest.yml) —
-      # see V1_IMPLEMENTATION.md for why: --without-gl drops the
-      # OpenGL/GLX/gtkglext dependency entirely, verified against a real
-      # conversion of a Bruker sample file through gwyddionpy.load().
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential pkg-config curl patchelf \
-            libgtk2.0-dev libfftw3-dev libxml2-dev gettext
-
+      # tarball (not a distro package) — see V1_IMPLEMENTATION.md:
+      # --without-gl drops the OpenGL/GLX/gtkglext dependency entirely.
+      # gcc-toolset-12 is required, not optional: EL8's default GCC 8.5
+      # rejects Gwyddion 2.71's OpenMP shared() clauses ("predetermined
+      # 'shared'"); the toolset compiler still targets glibc 2.28.
       - name: Build, bundle, and package gwyconvert
-        run: converter/ci/build-linux.sh
-        env:
-          OUT_DIR: ${{ github.workspace }}/dist-converter
+        # $GITHUB_WORKSPACE, not ${{ github.workspace }}: in container jobs
+        # the expression resolves to the runner's HOST path, not the
+        # container mount (actions/runner#2058); the GITHUB_WORKSPACE env
+        # var inside the step is always the container-correct one.
+        run: |
+          source /opt/rh/gcc-toolset-12/enable
+          export OUT_DIR="$GITHUB_WORKSPACE/dist-converter"
+          converter/ci/build-linux.sh
 
       - name: Upload to the release
         env:

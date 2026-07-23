@@ -65,7 +65,20 @@ cp -r "$PREFIX/lib/gwyddion" "$BUNDLE_DIR/lib/gwyddion"
 # glibc's own pieces: never bundle these (see policy note above).
 EXCLUDE_RE='^(linux-vdso\.so|ld-linux|libc\.so|libm\.so|libpthread\.so|libdl\.so|librt\.so|libresolv\.so|libnsl\.so|libutil\.so)'
 
-ldd "$BUILT_GWYCONVERT" | awk '{print $1, $3}' | while read -r name path; do
+# ldd the executable AND every dlopen()-loaded module: the modules have
+# their own NEEDED libraries that never appear in the executable's ldd
+# output (e.g. libxml2 for the anasys_xml/spml/zyvex parsers). Confirmed
+# by hand (2026-07-22): without this, those formats silently vanish from
+# --list-formats on any target lacking the library — the builder itself
+# masked the gap because its dnf/apt-installed system libs filled in.
+# LD_LIBRARY_PATH makes the modules' deps on the fresh Gwyddion build
+# resolvable during ldd (the executable got an explicit RPATH; the
+# libtool-built modules' install RPATH is not guaranteed).
+{
+  ldd "$BUILT_GWYCONVERT"
+  find "$PREFIX/lib/gwyddion/modules" -name '*.so' \
+    -exec env LD_LIBRARY_PATH="$PREFIX/lib" ldd {} \;
+} | awk '$2 == "=>" {print $1, $3}' | sort -u | while read -r name path; do
   [[ -z "$path" ]] && continue          # vdso / the dynamic linker itself: no real file
   [[ "$name" =~ $EXCLUDE_RE ]] && continue
   cp -n "$path" "$BUNDLE_DIR/lib/"
@@ -83,6 +96,11 @@ cat > "$BUNDLE_DIR/gwyconvert" <<'WRAPPER'
 # path compiled in at CI build time. See build-linux.sh for the full story.
 here="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 export GWYDDION_LIBDIR="$here/lib"
+# Required for the dlopen()-loaded modules' OWN dependencies (libxml2 &
+# co.): an executable's RUNPATH does not apply to libraries needed by a
+# dlopen()'d object, so without this only deps that happen to be already
+# loaded into the process (the core Gwyddion/GTK libs) would resolve.
+export LD_LIBRARY_PATH="$here/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec "$here/lib/gwyconvert.real" "$@"
 WRAPPER
 chmod +x "$BUNDLE_DIR/gwyconvert"
