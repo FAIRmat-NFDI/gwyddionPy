@@ -16,6 +16,7 @@ test-data/*
 !test-data/README.md
 
 # Local working notes — never pushed upstream
+docs/
 CONTEXT.md
 TODO.md
 CLAUDE.md

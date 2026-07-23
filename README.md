@@ -19,18 +19,24 @@ data.to_gwy("scan.gwy")                   # back to Gwyddion-native format
 
 A small headless C helper, `gwyconvert` (in `converter/`), links Gwyddion's
 libraries and converts any supported raw file to Gwyddion's native `.gwy`
-format; the pure-Python package `gwyddionpy` (in `python/`) runs it as a
+format; the pure-Python package `gwyddionpy` (in `gwyddionpy/`) runs it as a
 subprocess and parses the result into NumPy. No compiled Python extension —
 Python version updates cannot break it.
 
 ## Installation
 
-Two parts (details in `docs/BUILD.md`):
-
-1. **Converter** (once per machine): install Gwyddion dev headers
-   (`sudo apt install libgwyddion20-dev libgtk2.0-dev libfftw3-dev`),
-   then `make -C converter` and put `gwyconvert` on your `PATH`.
-2. **Python package**: `pip install ./python` (extras: `[hdf5]`, `[test]`).
+1. **Python package**: `pip install gwyddionpy` (extras: `[hdf5]`, `[test]`, `[dev]`).
+2. **Converter** (once per machine) — pick one:
+   - **Fetch a prebuilt binary**: `gwyddionpy-fetch-converter`. Downloads
+     `gwyconvert` from a GitHub Release into a local cache; gwyddionpy then
+     finds it automatically. Never runs on its own (not on `pip install`,
+     not on import), never touches apt/dnf/brew. Linux only for now — no
+     release has shipped a binary yet, so this will fail with a clear error
+     until one does; build it yourself (below) in the meantime.
+   - **Build it yourself** (any platform, details in `docs/BUILD.md`):
+     install Gwyddion dev headers
+     (`sudo apt install libgwyddion20-dev libgtk2.0-dev libfftw3-dev`),
+     then `make -C converter` and put `gwyconvert` on your `PATH`.
 
 ## Documentation
 
@@ -42,4 +48,8 @@ TROUBLESHOOTING, EXTENDING, CHANGELOG.
 Apache-2.0 (see `LICENSE`) for this repository, **except** `converter/`,
 which is GPL-2.0-or-later (see `converter/COPYING`) because it links the
 GPL-licensed Gwyddion libraries. The Python package communicates with the
-converter only via subprocess and stays Apache-2.0.
+converter only via subprocess and stays Apache-2.0 — including the
+`gwyddionpy-fetch-converter` helper itself, which is plain Apache-2.0
+Python containing no GPL code. The prebuilt `gwyconvert` binary it
+downloads is the actual GPL-2.0-or-later artifact; it's distributed
+separately as a GitHub Release asset, never bundled into the PyPI wheel.
