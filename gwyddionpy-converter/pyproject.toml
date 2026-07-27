@@ -32,6 +32,12 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.uv]
+# This package is only published to TestPyPI so far; extra-index-url
+# keeps real PyPI available as a fallback for its build/dev dependencies.
+index-url = "https://test.pypi.org/simple"
+extra-index-url = ["https://pypi.org/simple"]
+
 [tool.setuptools_scm]
 # Same repo, same tags as gwyddionpy/pyproject.toml's [tool.setuptools_scm]
 # (OQ7c: converter releases share the Python package's tag) — both packages

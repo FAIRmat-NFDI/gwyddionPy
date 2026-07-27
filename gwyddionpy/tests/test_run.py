@@ -1,5 +1,7 @@
 """Converter discovery and failure paths. These manipulate the process
 environment (not mocks) to exercise real code paths."""
+import sys
+
 import numpy as np
 import pytest
 
@@ -39,6 +41,58 @@ def test_env_var_pointing_nowhere(monkeypatch):
 def test_explicit_converter_pointing_nowhere():
     with pytest.raises(gwyddionpy.ConverterNotFoundError):
         find_converter("/no/such/gwyconvert")
+
+
+def _install_fake_converter_package(tmp_path, monkeypatch, body):
+    """Make a real, importable `gwyddionpy_converter` module (not a mock)
+    available on sys.path, with the given `binary_path()` body."""
+    pkg_root = tmp_path / "site-packages"
+    pkg_dir = pkg_root / "gwyddionpy_converter"
+    pkg_dir.mkdir(parents=True)
+    (pkg_dir / "__init__.py").write_text(body)
+    monkeypatch.syspath_prepend(str(pkg_root))
+    monkeypatch.delitem(sys.modules, "gwyddionpy_converter", raising=False)
+
+
+def test_installed_converter_package_fallback(
+    no_converter_anywhere, tmp_path, monkeypatch
+):
+    """gwyddionpy-converter is now a hard dependency (pyproject.toml) that
+    ships gwyconvert as installed-package data; find_converter() must fall
+    back to gwyddionpy_converter.binary_path() when PATH/env var don't
+    resolve — this is the discovery step that was missing (D6 item 4)."""
+    binary = tmp_path / "gwyconvert"
+    binary.write_text("#!/bin/sh\necho stub\n")
+    binary.chmod(0o755)
+    _install_fake_converter_package(
+        tmp_path,
+        monkeypatch,
+        "from pathlib import Path\n\n\n"
+        f"def binary_path():\n    return Path({str(binary)!r})\n",
+    )
+    try:
+        assert find_converter() == str(binary)
+    finally:
+        sys.modules.pop("gwyddionpy_converter", None)
+
+
+def test_installed_converter_package_binary_missing_falls_through(
+    no_converter_anywhere, tmp_path, monkeypatch
+):
+    """A gwyddionpy_converter package whose bundled binary is missing (e.g.
+    an unbuilt platform wheel) must not raise from find_converter() itself -
+    it falls through to the next discovery step."""
+    _install_fake_converter_package(
+        tmp_path,
+        monkeypatch,
+        "def binary_path():\n"
+        "    raise FileNotFoundError('not built for this platform')\n",
+    )
+    try:
+        with pytest.raises(gwyddionpy.ConverterNotFoundError):
+            find_converter()
+    finally:
+        sys.modules.pop("gwyddionpy_converter", None)
 
 
 def test_raw_load_without_converter_raises(no_converter_anywhere, tmp_path):
