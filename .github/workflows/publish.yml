@@ -1,12 +1,26 @@
-name: Publish to PyPI
+name: Publish wheels to TestPyPI
 
+# Both wheels (gwyddionpy and gwyddionpy-converter) are published from
+# this single workflow so they can share one build-converter run: the
+# Rocky Linux 8 build of gwyconvert happens once per release, and
+# publish-python-wheel / publish-converter-wheel both `needs:` it. That
+# also keeps github.event.release.tag_name directly available to every
+# job below, since they're all part of the same release-triggered run.
 on:
   release:
     types: [published]
 
 jobs:
-  build:
-    name: Build package
+  build-converter:
+    name: Build gwyconvert (linux-x86_64)
+    uses: ./.github/workflows/build-converter.yml
+    with:
+      tag: ${{ github.event.release.tag_name }}
+    secrets: inherit
+
+  build-python-wheel:
+    name: Build gwyddionpy package
+    needs: build-converter
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,10 +43,10 @@ jobs:
           name: dist-artifacts
           path: dist/
 
-  deploy:
+  publish-python-wheel:
     # TODO: Use PyPI in production
-    name: Upload to TestPyPI
-    needs: build
+    name: Upload gwyddionpy to TestPyPI
+    needs: build-python-wheel
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -45,6 +59,54 @@ jobs:
         with:
           name: dist-artifacts
           path: dist/
+
+      - name: Publish package distributions to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-converter-wheel:
+    name: Build gwyddionpy-converter wheel (linux-x86_64) and publish
+    needs: build-converter
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi-converter
+      url: https://test.pypi.org/p/gwyddionpy-converter
+    permissions:
+      id-token: write  # required for PyPI Trusted Publishing (OIDC)
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.event.release.tag_name }}
+      ASSET: gwyconvert-linux-x86_64.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + tags: setuptools-scm (root=".." in
+          # gwyddionpy-converter/pyproject.toml) derives the version from
+          # the same git tags as gwyddionpy itself.
+          fetch-depth: 0
+
+      - name: Download and verify the converter bundle
+        run: |
+          mkdir -p /tmp/converter-dl
+          gh release download "$TAG" \
+            --pattern "$ASSET" --pattern "$ASSET.sha256" \
+            --dir /tmp/converter-dl
+          (cd /tmp/converter-dl && sha256sum -c "$ASSET.sha256")
+
+      - name: Extract into the wheel's package data
+        run: |
+          BIN_DIR="gwyddionpy-converter/src/gwyddionpy_converter/bin"
+          mkdir -p "$BIN_DIR"
+          tar xzf "/tmp/converter-dl/$ASSET" -C "$BIN_DIR"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the wheel
+        run: uv build --wheel ./gwyddionpy-converter --out-dir dist
 
       - name: Publish package distributions to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1

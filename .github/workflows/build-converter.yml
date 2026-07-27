@@ -1,11 +1,34 @@
 name: Build and publish gwyconvert
 
-# Same trigger as publish.yml (OQ7c: converter releases share the Python
-# package's tag) — this workflow attaches gwyconvert-*.tar.gz assets to
-# the same GitHub Release, separate from the PyPI publish entirely.
+# Two ways in:
+# - workflow_call: publish.yml's `build-converter` job `uses:` this and
+#   both wheel-publish jobs `needs:` it, so the Rocky Linux 8 build below
+#   runs exactly once per release and both wheels are gated on it
+#   succeeding. No standalone `release:` trigger here: that would double
+#   the (slow) build and race its own `--clobber` upload against the
+#   called run.
+# - pull_request: runs the same build (minus the release upload) on every
+#   PR touching the converter, so a broken Rocky Linux 8 recipe fails CI
+#   instead of only surfacing at release time.
+#
+# `tag` is passed explicitly as an input rather than read from
+# github.event.release.tag_name: the full github.event payload isn't
+# reliably forwarded into a called workflow (only github.sha/github.ref
+# are guaranteed to match the caller's), so the caller passes it down.
+# It's absent on pull_request runs, which is fine since those skip the
+# upload step (there's no release to attach to).
 on:
-  release:
-    types: [published]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - "gwyddionpy-converter/**"
+      - ".github/workflows/build-converter.yml"
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 jobs:
   linux:
@@ -61,6 +84,7 @@ jobs:
           gwyddionpy-converter/ci/build-linux.sh
 
       - name: Upload to the release
+        if: github.event_name == 'workflow_call'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -68,7 +92,7 @@ jobs:
           # one git sees at runtime, tripping the safe.directory ownership
           # guard (CVE-2022-24765) the moment `gh` shells out to git.
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          gh release upload "${{ github.event.release.tag_name }}" \
+          gh release upload "${{ inputs.tag }}" \
             dist-converter/gwyconvert-linux-x86_64.tar.gz \
             dist-converter/gwyconvert-linux-x86_64.tar.gz.sha256 \
             --clobber
