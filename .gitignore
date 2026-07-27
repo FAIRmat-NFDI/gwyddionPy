@@ -8,8 +8,8 @@ build/
 .pytest_cache/
 
 # Built converter binary
-converter/gwyconvert
-converter/*.o
+gwyddionpy-converter/gwyconvert
+gwyddionpy-converter/*.o
 
 # Test data: binaries are fetched, not committed (see test-data/README.md)
 test-data/*

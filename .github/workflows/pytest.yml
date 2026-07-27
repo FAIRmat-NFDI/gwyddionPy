@@ -11,7 +11,7 @@ jobs:
   # the two ways to get a working gwyconvert documented in docs/BUILD.md.
   # Deliberately kept side by side rather than one replacing the other:
   # pytest-source-tarball tests the same recipe the release binary uses
-  # (converter/ci/build-gwyddion.sh); pytest-system-package tests that the
+  # (gwyddionpy-converter/ci/build-gwyddion.sh); pytest-system-package tests that the
   # System package build path BUILD.md documents for local dev still
   # actually works, since real contributors may still reach for it.
 
@@ -41,8 +41,8 @@ jobs:
 
       - name: Build gwyconvert
         run: |
-          make -C converter
-          make -C converter check
+          make -C gwyddionpy-converter
+          make -C gwyddionpy-converter check
 
       - name: Install uv and set the python version to ${{ matrix.python-version }}
         uses: astral-sh/setup-uv@v5
@@ -54,7 +54,7 @@ jobs:
 
       - name: Test with pytest
         env:
-          GWYDDIONPY_CONVERT: ${{ github.workspace }}/converter/gwyconvert
+          GWYDDIONPY_CONVERT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
         run: pytest gwyddionpy/tests
 
   pytest-source-tarball:
@@ -69,7 +69,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Builds Gwyddion itself from its official source tarball
-      # (converter/ci/build-gwyddion.sh — shared with build-converter.yml)
+      # (gwyddionpy-converter/ci/build-gwyddion.sh — shared with build-converter.yml)
       # instead of the system package (docs/BUILD.md's "System package
       # build"). Deliberate: that apt-based path depends on Ubuntu's own
       # package split, which already bit this project once — the actual
@@ -90,8 +90,8 @@ jobs:
         env:
           WORK_DIR: ${{ github.workspace }}/gwyddion-build
           PREFIX: ${{ github.workspace }}/gwyddion-build/install
-          GWYCONVERT_OUT: ${{ github.workspace }}/converter/gwyconvert
-        run: converter/ci/build-gwyddion.sh
+          GWYCONVERT_OUT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
+        run: gwyddionpy-converter/ci/build-gwyddion.sh
 
       - name: Install uv and set the python version to ${{ matrix.python-version }}
         uses: astral-sh/setup-uv@v5
@@ -103,5 +103,5 @@ jobs:
 
       - name: Test with pytest
         env:
-          GWYDDIONPY_CONVERT: ${{ github.workspace }}/converter/gwyconvert
+          GWYDDIONPY_CONVERT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
         run: pytest gwyddionpy/tests

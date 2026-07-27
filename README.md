@@ -17,7 +17,7 @@ data.to_gwy("scan.gwy")                   # back to Gwyddion-native format
 
 ## How it works
 
-A small headless C helper, `gwyconvert` (in `converter/`), links Gwyddion's
+A small headless C helper, `gwyconvert` (in `gwyddionpy-converter/`), links Gwyddion's
 libraries and converts any supported raw file to Gwyddion's native `.gwy`
 format; the pure-Python package `gwyddionpy` (in `gwyddionpy/`) runs it as a
 subprocess and parses the result into NumPy. No compiled Python extension —
@@ -36,7 +36,7 @@ Python version updates cannot break it.
    - **Build it yourself** (any platform, details in `docs/BUILD.md`):
      install Gwyddion dev headers
      (`sudo apt install libgwyddion20-dev libgtk2.0-dev libfftw3-dev`),
-     then `make -C converter` and put `gwyconvert` on your `PATH`.
+     then `make -C gwyddionpy-converter` and put `gwyconvert` on your `PATH`.
 
 ## Documentation
 
@@ -45,8 +45,9 @@ TROUBLESHOOTING, EXTENDING, CHANGELOG.
 
 ## License
 
-Apache-2.0 (see `LICENSE`) for this repository, **except** `converter/`,
-which is GPL-2.0-or-later (see `converter/COPYING`) because it links the
+Apache-2.0 (see `LICENSE`) for this repository, **except**
+`gwyddionpy-converter/`, which is GPL-2.0-or-later (see
+`gwyddionpy-converter/COPYING`) because it links the
 GPL-licensed Gwyddion libraries. The Python package communicates with the
 converter only via subprocess and stays Apache-2.0 — including the
 `gwyddionpy-fetch-converter` helper itself, which is plain Apache-2.0

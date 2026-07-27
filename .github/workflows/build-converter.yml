@@ -58,7 +58,7 @@ jobs:
         run: |
           source /opt/rh/gcc-toolset-12/enable
           export OUT_DIR="$GITHUB_WORKSPACE/dist-converter"
-          converter/ci/build-linux.sh
+          gwyddionpy-converter/ci/build-linux.sh
 
       - name: Upload to the release
         env:

@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=78.1.1", "setuptools-scm[toml]>=6.2", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gwyddionpy-converter"
+dynamic = ["version"]
+authors = [
+    { name = "The NOMAD Authors" },
+]
+description = "Prebuilt gwyconvert binary bundle for gwyddionpy (GPL-2.0-or-later companion package)"
+readme = "README.md"
+license = { file = "COPYING" }
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+    "Operating System :: POSIX :: Linux",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/FAIRmat-NFDI/gwyddionPy"
+"Parent Project" = "https://github.com/FAIRmat-NFDI"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+# Same repo, same tags as gwyddionpy/pyproject.toml's [tool.setuptools_scm]
+# (OQ7c: converter releases share the Python package's tag) — both packages
+# derive their version from the identical git tag automatically, with no
+# extra wiring needed.
+root = ".."
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"

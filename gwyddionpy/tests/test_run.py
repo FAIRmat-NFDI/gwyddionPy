@@ -74,7 +74,7 @@ def test_list_formats_reports_known_formats():
     formats = gwyddionpy.list_formats()
 
     # Not an exact count on purpose: the system-package build reports 170
-    # (Gwyddion 2.60), the source-tarball build converter/ci/build-*.sh
+    # (Gwyddion 2.60), the source-tarball build gwyddionpy-converter/ci/build-*.sh
     # uses reports 185 (Gwyddion 2.71) — both are legitimate, and the
     # count will keep drifting as Gwyddion gains formats. > 100 is a
     # floor that only a genuinely broken registry (this test's actual

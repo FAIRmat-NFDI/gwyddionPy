@@ -27,7 +27,7 @@ sudo apt install libgwyddion20-dev gwyddion libgtk2.0-dev libfftw3-dev \
 # 2. This repository, and the converter binary
 git clone https://github.com/FAIRmat-NFDI/gwyddionPy.git
 cd gwyddionPy
-make -C converter
+make -C gwyddionpy-converter
 
 # 3. A Python environment with the gwyddionpy package
 python3 -m venv .venv
@@ -39,7 +39,7 @@ pip install -i https://test.pypi.org/simple/ \
 # flags above once it's on production PyPI; docs/MAINTENANCE.md tracks that)
 
 # 4. Point gwyddionpy at the binary you just built
-export GWYDDIONPY_CONVERT=$PWD/converter/gwyconvert
+export GWYDDIONPY_CONVERT=$PWD/gwyddionpy-converter/gwyconvert
 ```
 
 Not on Debian/Ubuntu? Install Gwyddion via your distro's package manager
@@ -60,7 +60,7 @@ failure mode to watch for** — a broken build can link and run perfectly
 fine while silently registering no formats at all (this project hit that
 exact bug twice; see `V1_IMPLEMENTATION.md` if you're curious). If you get
 `ConverterNotFoundError` instead, `GWYDDIONPY_CONVERT` isn't set correctly
-or `make -C converter` didn't produce a binary — re-check step 2/4 above.
+or `make -C gwyddionpy-converter` didn't produce a binary — re-check step 2/4 above.
 
 Once that works, try it on a real file:
 
