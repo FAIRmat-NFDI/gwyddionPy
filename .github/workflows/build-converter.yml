@@ -84,7 +84,13 @@ jobs:
           gwyddionpy-converter/ci/build-linux.sh
 
       - name: Upload to the release
-        if: github.event_name == 'workflow_call'
+        # github.event_name here still reads 'release' (the caller's
+        # triggering event), not 'workflow_call' — known GH Actions
+        # behavior, the event_name a called workflow sees is the
+        # original one, not workflow_call. So gate on the `tag` input
+        # itself: it's only ever set when publish.yml calls this
+        # reusably; empty on the standalone pull_request trigger.
+        if: inputs.tag != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
