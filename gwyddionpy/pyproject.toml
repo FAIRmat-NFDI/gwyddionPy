@@ -25,6 +25,7 @@ dependencies = [
     "numpy>=1.22",
     "gwyfile>=0.3",
     "platformdirs>=3.0",
+    "gwyddionpy-converter"
 ]
 
 [project.urls]
