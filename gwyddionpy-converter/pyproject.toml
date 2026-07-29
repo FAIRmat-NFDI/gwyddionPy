@@ -38,6 +38,52 @@ where = ["src"]
 index-url = "https://test.pypi.org/simple"
 extra-index-url = ["https://pypi.org/simple"]
 
+[tool.cibuildwheel]
+# One wheel per platform, not per Python version. The payload is a
+# standalone executable run via subprocess, so it depends on no Python ABI
+# and setup.py tags it py3-none-<platform>; building it once per Python
+# would repeat a multi-minute Gwyddion build for byte-identical results.
+# cibuildwheel has no "build once" identifier of its own — its identifiers
+# are always version-specific — so pinning to a single interpreter is how
+# that is expressed. Verified 2026-07-29 that it accepts the resulting
+# py3-none wheel without complaint (V1_IMPLEMENTATION.md, V1d-0).
+build = "cp312-*"
+
+# musllinux is deliberately out of scope (target set is Linux glibc, macOS
+# arm64/x86_64, Windows x86_64). Skipping it also avoids building the whole
+# GTK2 stack a second time against musl for users we do not have.
+skip = "*musllinux*"
+
+# glibc 2.28 floor, matching the Rocky Linux 8 recipe this replaces: covers
+# RHEL/Rocky/Alma 8+, Debian 10+, Ubuntu 18.10+. A newer default would
+# silently exclude RHEL 9 (2.34) and Debian bookworm (2.36) — both of which
+# this project has already been bitten by (V1_IMPLEMENTATION.md 2026-07-22).
+manylinux-x86_64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+before-all = "bash {project}/ci/cibw-before-all-linux.sh"
+# setuptools-scm derives the version from git tags via root = ".." (the repo
+# root). cibuildwheel copies only *this* package directory into the build
+# container, so .git is not reachable from inside it and setuptools-scm
+# cannot resolve a version on its own. The caller must pass one in;
+# environment-pass forwards it from the host into the container. publish.yml
+# sets it from the release tag, matching the lockstep pin on the gwyddionpy
+# side. Locally: export it to whatever you want the wheel called.
+environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER"]
+# The bundle staged by before-all is already self-contained and
+# RPATH-patched by bundle-linux.sh, which walks the dlopen()'d format
+# plugins auditwheel cannot see. Running auditwheel on top would at best
+# duplicate work and at worst rewrite the RPATHs just set, so the repair
+# step is a plain copy. See docs/gwyddionpy-build-as-matid.md.
+repair-wheel-command = "cp {wheel} {dest_dir}"
+
+# Cheap but load-bearing smoke test: a bundle that lost its format plugins
+# still exits 0 and reports an empty list, which is exactly how two of this
+# project's bugs presented (V1_IMPLEMENTATION.md 2026-07-22). Assert on the
+# count rather than on the exit status.
+test-command = "python -c \"import json,subprocess;from gwyddionpy_converter import binary_path;n=len(json.loads(subprocess.run([str(binary_path()),'--list-formats'],capture_output=True,text=True,check=True).stdout));print(f'{n} formats');assert n>100,f'only {n} formats - bundle is missing its plugins'\""
+
 [tool.setuptools_scm]
 # Same repo, same tags as gwyddionpy/pyproject.toml's [tool.setuptools_scm]
 # (OQ7c: converter releases share the Python package's tag) — both packages
