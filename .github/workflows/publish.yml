@@ -2,10 +2,16 @@ name: Publish wheels to TestPyPI
 
 # Both wheels (gwyddionpy and gwyddionpy-converter) are published from
 # this single workflow so they can share one build-converter run: the
-# Rocky Linux 8 build of gwyconvert happens once per release, and
-# publish-python-wheel / publish-converter-wheel both `needs:` it. That
-# also keeps github.event.release.tag_name directly available to every
-# job below, since they're all part of the same release-triggered run.
+# Rocky Linux 8 build of gwyconvert happens once per release, and every
+# job below descends from it. That also keeps
+# github.event.release.tag_name directly available to every job, since
+# they're all part of the same release-triggered run.
+#
+# Job graph (the chain, not a fan-out — see publish-python-wheel for why
+# the converter must reach the index first):
+#
+#   build-converter ─┬─> build-python-wheel ──────────┐
+#                    └─> publish-converter-wheel ─────┴─> publish-python-wheel
 on:
   release:
     types: [published]
@@ -20,8 +26,14 @@ jobs:
 
   build-python-wheel:
     name: Build gwyddionpy package
+    # `needs: build-converter` is not just ordering — with the lockstep pin
+    # below, a released gwyddionpy hard-requires the converter built from
+    # this same tag. Publishing it while that build is broken would ship a
+    # package whose `[converter]` extra can never resolve.
     needs: build-converter
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,8 +46,69 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Lockstep versioning. Both packages are versioned from this same git
+      # tag (setuptools-scm; the converter sets root="..") and are published
+      # by this same workflow run, so a released gwyddionpy must require
+      # exactly the converter from that tag. This can't be written into
+      # pyproject.toml because the version is dynamic — and it is applied
+      # here, at release time, rather than committed, so that local/editable
+      # installs keep resolving the unpinned requirement (a dev version like
+      # 0.0.8.post1.dev0+g4bb1ae4.d20260729 corresponds to no published
+      # converter, so an `==` pin on it could never be satisfied).
+      # Release tags are "v"-prefixed while versions are not (v0.0.8 ->
+      # 0.0.8) — see _fetch_converter._release_tag() for the same conversion.
+      - name: Pin gwyddionpy-converter to this exact release
+        run: |
+          VERSION="${TAG#v}"
+          python3 - "$VERSION" <<'PY'
+          import pathlib, re, sys
+
+          version = sys.argv[1]
+          path = pathlib.Path("gwyddionpy/pyproject.toml")
+          text = path.read_text()
+          new_text, count = re.subn(
+              r'^converter = \["gwyddionpy-converter"\]$',
+              f'converter = ["gwyddionpy-converter=={version}"]',
+              text,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          # Fail loudly rather than silently shipping an unpinned release if
+          # the extra is ever reworded or moved.
+          if count != 1:
+              sys.exit(
+                  "lockstep pin FAILED: no line matching "
+                  '\'converter = ["gwyddionpy-converter"]\' in '
+                  f"{path}. Update this step to match the current form."
+              )
+          path.write_text(new_text)
+          print(f"pinned gwyddionpy-converter=={version}")
+          PY
+
       - name: Build package
         run: uv build ./gwyddionpy --out-dir dist
+
+      # The sed-style edit above only proves the file changed; this proves
+      # the pin actually reached the metadata pip will read.
+      - name: Verify the lockstep pin reached the built metadata
+        run: |
+          VERSION="${TAG#v}"
+          python3 - "$VERSION" <<'PY'
+          import glob, sys, zipfile
+
+          version = sys.argv[1]
+          expected = f"Requires-Dist: gwyddionpy-converter=={version}; extra == \"converter\""
+          wheels = glob.glob("dist/*.whl")
+          if not wheels:
+              sys.exit("no wheel found in dist/")
+          archive = zipfile.ZipFile(wheels[0])
+          name = next(n for n in archive.namelist() if n.endswith(".dist-info/METADATA"))
+          metadata = archive.read(name).decode()
+          if expected not in metadata:
+              print(metadata)
+              sys.exit(f"lockstep pin missing from {wheels[0]}: expected {expected!r}")
+          print(f"verified in {wheels[0]}: {expected}")
+          PY
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
@@ -46,7 +119,21 @@ jobs:
   publish-python-wheel:
     # TODO: Use PyPI in production
     name: Upload gwyddionpy to TestPyPI
-    needs: build-python-wheel
+    # Ordering is deliberate and load-bearing: gwyddionpy is published
+    # *after* the converter, never in parallel with it. The lockstep pin
+    # added in build-python-wheel makes a released gwyddionpy hard-require
+    # `gwyddionpy-converter==<this tag>`, so if the converter upload fails
+    # while gwyddionpy's succeeds, the published `[converter]` extra can
+    # never resolve — and PyPI forbids re-uploading a version, so the only
+    # fix would be cutting a whole new release. Depending on
+    # publish-converter-wheel means that failure skips this job instead.
+    #
+    # The reverse ordering failure is harmless by comparison: a converter
+    # published with no gwyddionpy referencing it yet just sits there
+    # unused. Recovery from a partial failure is a plain re-run of this
+    # workflow — both publish steps set `skip-existing: true`, so whichever
+    # package already landed is skipped and only the failed one retries.
+    needs: [build-python-wheel, publish-converter-wheel]
     runs-on: ubuntu-latest
     environment:
       name: testpypi

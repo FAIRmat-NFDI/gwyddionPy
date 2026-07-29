@@ -26,7 +26,15 @@ Python version updates cannot break it.
 ## Installation
 
 1. **Python package**: `pip install gwyddionpy` (extras: `[hdf5]`, `[test]`, `[dev]`).
+   This stays 100% Apache-2.0 — it never pulls the GPL-licensed converter.
 2. **Converter** (once per machine) — pick one:
+   - **Install the companion wheel**: `pip install "gwyddionpy[converter]"`.
+     Pulls `gwyddionpy-converter`, a separate GPL-2.0-or-later package that
+     ships a prebuilt `gwyconvert` as package data — no download step and no
+     build step. Opting in via the extra is what keeps the plain install
+     above free of GPL artifacts. Linux x86_64 only for now, and not yet on
+     real PyPI (TestPyPI only), so use one of the options below until it
+     ships there.
    - **Fetch a prebuilt binary**: `gwyddionpy-fetch-converter`. Downloads
      `gwyconvert` from a GitHub Release into a local cache; gwyddionpy then
      finds it automatically. Never runs on its own (not on `pip install`,
