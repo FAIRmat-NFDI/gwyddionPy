@@ -62,14 +62,21 @@ manylinux-x86_64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
-before-all = "bash {project}/ci/cibw-before-all-linux.sh"
+before-all = "bash {package}/ci/cibw-before-all-linux.sh"
+# {package}, not {project}: {project} is always the repo root (cibuildwheel
+# copies the whole checkout into the container as /project and only ever
+# treats {project} as that root), while the ci/ scripts live inside this
+# package directory. Verified against cibuildwheel 4.1.0's own source
+# (platforms/linux.py) after {project} silently resolved to a path with no
+# ci/ dir and failed with "No such file or directory".
+#
 # setuptools-scm derives the version from git tags via root = ".." (the repo
-# root). cibuildwheel copies only *this* package directory into the build
-# container, so .git is not reachable from inside it and setuptools-scm
-# cannot resolve a version on its own. The caller must pass one in;
-# environment-pass forwards it from the host into the container. publish.yml
-# sets it from the release tag, matching the lockstep pin on the gwyddionpy
-# side. Locally: export it to whatever you want the wheel called.
+# root). actions/checkout's shallow fetch has no tags to find from inside
+# the container regardless, so setuptools-scm cannot resolve a version on
+# its own either way. The caller must pass one in; environment-pass forwards
+# it from the host into the container. publish.yml sets it from the release
+# tag, matching the lockstep pin on the gwyddionpy side. Locally: export it
+# to whatever you want the wheel called.
 environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER"]
 # The bundle staged by before-all is already self-contained and
 # RPATH-patched by bundle-linux.sh, which walks the dlopen()'d format
@@ -91,7 +98,7 @@ test-command = "python -c \"import json,subprocess;from gwyddionpy_converter imp
 # running this on two runners (macos-15 for arm64, macos-15-intel for
 # x86_64), which is the same shape matid uses.
 archs = ["native"]
-before-all = "bash {project}/ci/cibw-before-all-macos.sh"
+before-all = "bash {package}/ci/cibw-before-all-macos.sh"
 # Same reasoning as Linux: bundle-macos.sh has already rewritten every
 # install name to @loader_path and re-signed the results, and delocate
 # cannot see Gwyddion's dlopen()'d format plugins. Letting it run would

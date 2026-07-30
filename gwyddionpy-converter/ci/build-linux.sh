@@ -18,7 +18,7 @@
 # sample file through gwyddionpy.load() produces identical output either
 # way), which matters specifically here because a *released* binary needs
 # to be minimal and portable, not just working in-place.
-#
+
 # Produces $OUT_DIR/gwyconvert-linux-x86_64.tar.gz + a matching .sha256.
 set -euo pipefail
 

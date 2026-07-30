@@ -64,7 +64,12 @@ export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
   "$CONVERTER_SRC" $(pkg-config --libs gwyddion) -Wl,-rpath,"$PREFIX/lib"
 
 echo "== Smoke test =="
-"$GWYCONVERT_OUT" --list-formats | python3 -c \
+# PE/Windows has no rpath: the -Wl,-rpath above only helps ELF/Mach-O, so on
+# Windows the loader would otherwise fail to find libgwyddion2-0.dll et al.
+# (installed by libtool to $PREFIX/bin, the Windows convention for shared
+# libs) and gwyconvert would exit without printing anything, surfacing here
+# as a JSONDecodeError on empty stdin instead of the real "DLL not found".
+PATH="$PREFIX/bin:$PATH" "$GWYCONVERT_OUT" --list-formats | python3 -c \
   "import json,sys; d=json.load(sys.stdin); assert len(d) > 100, d; print(f'{len(d)} formats OK')"
 
 echo "Built $GWYCONVERT_OUT"
