@@ -84,6 +84,30 @@ echo "== Verifying the bundle (clean env, NO GWYDDION_LIBDIR — the user path) 
 # survive (OS DLLs require it). GWYDDION_LIBDIR is deliberately NOT set:
 # module discovery must succeed via the topdir fallback documented above,
 # because that is all a user's machine has.
-env -i SYSTEMROOT="${SYSTEMROOT:-C:\\Windows}" \
-  "$BUNDLE_DIR/gwyconvert.exe" --list-formats | python3 -c \
+set +e
+OUTPUT="$(env -i SYSTEMROOT="${SYSTEMROOT:-C:\\Windows}" \
+  "$BUNDLE_DIR/gwyconvert.exe" --list-formats 2>&1)"
+STATUS=$?
+set -e
+if [ "$STATUS" -ne 0 ] || [ -z "$OUTPUT" ]; then
+  # A silent crash with zero output (as opposed to a printed error) means
+  # gwyconvert.exe or a module couldn't resolve a dependency at load time.
+  # ntldd -R above already proved every *statically imported* DLL resolves
+  # and got copied — so a gap here means something is loaded through a
+  # second layer of dlopen (e.g. a GTK gdk-pixbuf loader or immodule cache
+  # entry) that never appears in anyone's import table. Re-running ntldd
+  # with PATH restricted to just the bundle directory (instead of clearing
+  # it in a subshell we can't introspect) surfaces exactly which dependency
+  # only resolves system-wide and never made it into the bundle.
+  echo "gwyconvert.exe exited $STATUS; output was:" >&2
+  echo "$OUTPUT" >&2
+  echo "-- dependencies resolvable from the bundle directory alone --" >&2
+  echo "-- (OS DLLs will show as \"not found\" too, normally resolved from" >&2
+  echo "-- System32 regardless of PATH; look for mingw64-named entries) --" >&2
+  PATH="$BUNDLE_DIR" ntldd -R "$BUNDLE_DIR/gwyconvert.exe" >&2 || true
+  find "$MODULES_PARENT/gwyddion" \( -name '*.dll' -o -name '*.so' \) -type f |
+    while read -r m; do PATH="$BUNDLE_DIR" ntldd -R "$m" >&2 || true; done
+  exit 1
+fi
+printf '%s' "$OUTPUT" | python3 -c \
   "import json,sys; d=json.load(sys.stdin); assert len(d) > 100, d; print(f'bundle OK: {len(d)} formats')"

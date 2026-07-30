@@ -24,9 +24,19 @@ echo "== Installing Gwyddion build dependencies (Homebrew) =="
 # 2.x cannot build against.
 brew install gtk+ fftw libxml2 gettext pkg-config
 
-# Homebrew's keg-only libraries are not on the default search paths.
+# Homebrew's keg-only libraries are not on the default search paths. Nor,
+# on Apple Silicon, is $BREW_PREFIX itself: /opt/homebrew isn't a compiler
+# default the way Intel's /usr/local is, so PKG_CONFIG_PATH alone isn't
+# enough — Gwyddion's own ./configure && make checks for some headers
+# (e.g. fftw3.h, used directly by libprocess/graph_measure_period.c) via
+# plain CPPFLAGS-driven compiles, not everything goes through pkg-config.
+# Confirmed 2026-07-30: this exact gap made the arm64 (macos-15) leg fail
+# with "fftw3.h file not found" while macos-15-intel succeeded, since
+# /usr/local/include is on clang's default search path there.
 BREW_PREFIX="$(brew --prefix)"
 export PKG_CONFIG_PATH="$BREW_PREFIX/lib/pkgconfig:$BREW_PREFIX/opt/libxml2/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export CPPFLAGS="-I$BREW_PREFIX/include -I$BREW_PREFIX/opt/libxml2/include ${CPPFLAGS:-}"
+export LDFLAGS="-L$BREW_PREFIX/lib -L$BREW_PREFIX/opt/libxml2/lib ${LDFLAGS:-}"
 export PATH="$BREW_PREFIX/opt/gettext/bin:$PATH"
 
 WORK_DIR="$(mktemp -d)"
