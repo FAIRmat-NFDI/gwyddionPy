@@ -39,7 +39,10 @@ echo "== Configuring (--without-gl) =="
 cd "$WORK_DIR/gwyddion-${GWYDDION_VERSION}"
 ./configure --prefix="$PREFIX" --without-gl \
   --disable-gtk-doc --disable-desktop-file-update
-make -j"$(nproc)"
+# nproc is GNU coreutils and absent on macOS; sysctl is the BSD equivalent.
+# Fall back to 1 rather than an empty -j (which would be unbounded).
+JOBS="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)"
+make -j"$JOBS"
 make install
 
 echo "== Building gwyconvert against the fresh install =="
@@ -53,7 +56,11 @@ export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
 # Caught by hand (V1_IMPLEMENTATION.md 2026-07-22) via `ldd`: without this
 # flag the resulting binary reported the *system* package's format count,
 # not this build's, despite having linked successfully against ours.
-gcc -O2 -Wall $(pkg-config --cflags gwyddion) -o "$GWYCONVERT_OUT" \
+# -Wl,-rpath is a GNU ld / ld64 flag understood by both gcc and clang, so the
+# same line serves Linux and macOS. $CC lets the caller pick the compiler
+# (macOS resolves `gcc` to clang, which is fine, but being explicit avoids
+# surprises if a real gcc is also on PATH via Homebrew).
+"${CC:-gcc}" -O2 -Wall $(pkg-config --cflags gwyddion) -o "$GWYCONVERT_OUT" \
   "$CONVERTER_SRC" $(pkg-config --libs gwyddion) -Wl,-rpath,"$PREFIX/lib"
 
 echo "== Smoke test =="
