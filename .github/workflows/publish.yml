@@ -154,7 +154,14 @@ jobs:
           skip-existing: true
 
   publish-converter-wheel:
-    name: Build gwyddionpy-converter wheel (linux-x86_64) and publish
+    # The wheels themselves are built by build-converter.yml's `wheels`
+    # matrix (setup.py + cibuildwheel on manylinux_2_28 / macos-15 /
+    # macos-15-intel / windows-latest — V1d) and arrive here as artifacts of
+    # the same run; this job only collects and uploads them. The previous
+    # incarnation rebuilt a single Linux wheel from the release tarball —
+    # that tarball still exists, but only as the fetch-helper's release
+    # asset, no longer as the wheel's source.
+    name: Publish gwyddionpy-converter wheels
     needs: build-converter
     runs-on: ubuntu-latest
     environment:
@@ -162,39 +169,27 @@ jobs:
       url: https://test.pypi.org/p/gwyddionpy-converter
     permissions:
       id-token: write  # required for PyPI Trusted Publishing (OIDC)
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAG: ${{ github.event.release.tag_name }}
-      ASSET: gwyconvert-linux-x86_64.tar.gz
     steps:
-      - uses: actions/checkout@v4
+      - name: Collect the wheel artifacts
+        uses: actions/download-artifact@v4
         with:
-          # Full history + tags: setuptools-scm (root=".." in
-          # gwyddionpy-converter/pyproject.toml) derives the version from
-          # the same git tags as gwyddionpy itself.
-          fetch-depth: 0
+          pattern: cibw-wheels-*
+          path: dist/
+          merge-multiple: true
 
-      - name: Download and verify the converter bundle
+      # Wheel-only stays the rule (no sdist): an sdist would let pip fall
+      # back to building Gwyddion from source on any user machine without a
+      # matching wheel. Guard against an empty dist/ too — publishing
+      # nothing "successfully" would break the lockstep pin silently.
+      - name: Fail rather than publish an empty release
         run: |
-          mkdir -p /tmp/converter-dl
-          gh release download "$TAG" \
-            --pattern "$ASSET" --pattern "$ASSET.sha256" \
-            --dir /tmp/converter-dl
-          (cd /tmp/converter-dl && sha256sum -c "$ASSET.sha256")
-
-      - name: Extract into the wheel's package data
-        run: |
-          BIN_DIR="gwyddionpy-converter/src/gwyddionpy_converter/bin"
-          mkdir -p "$BIN_DIR"
-          tar xzf "/tmp/converter-dl/$ASSET" -C "$BIN_DIR"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          python-version: "3.12"
-
-      - name: Build the wheel
-        run: uv build --wheel ./gwyddionpy-converter --out-dir dist
+          ls -l dist/
+          count=$(ls dist/*.whl 2>/dev/null | wc -l)
+          if [ "$count" -lt 1 ]; then
+            echo "no wheels collected — refusing to publish" >&2
+            exit 1
+          fi
+          echo "$count wheel(s) ready"
 
       - name: Publish package distributions to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1

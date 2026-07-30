@@ -31,6 +31,80 @@ on:
         type: string
 
 jobs:
+  # ---------------------------------------------------------------------
+  # Wheels: one py3-none wheel per platform via setup.py + cibuildwheel
+  # (V1d; see V1_IMPLEMENTATION.md). The `linux` tarball job below is kept
+  # unchanged alongside these — it feeds the GitHub Release asset that
+  # gwyddionpy's _fetch_converter.py downloads, a shipped code path the
+  # wheels do not replace. Retiring it is a recorded open decision, not an
+  # omission.
+  # ---------------------------------------------------------------------
+  wheels:
+    name: Build wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest    # -> py3-none-manylinux_2_28_x86_64
+          - os: macos-15         # arm64 runner -> py3-none-macosx_*_arm64
+          - os: macos-15-intel   # -> py3-none-macosx_*_x86_64
+          - os: windows-latest   # -> py3-none-win_amd64
+    steps:
+      - uses: actions/checkout@v4
+
+      # setuptools-scm cannot see .git from inside cibuildwheel's Linux
+      # container (root=".." resolves outside the copied project), so the
+      # version is always passed in explicitly. Release runs get it from
+      # the tag (v0.0.9 -> 0.0.9, same stripping as the lockstep pin in
+      # publish.yml); pull_request runs have no tag and use a throwaway
+      # 0.0.0 — those wheels are build-checks, never published.
+      - name: Set the wheel version
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag }}"
+          VERSION="${TAG#v}"
+          [ -z "$VERSION" ] && VERSION="0.0.0"
+          echo "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER=$VERSION" >> "$GITHUB_ENV"
+
+      # Windows only: the Gwyddion build needs a real MSYS2 MinGW64 shell,
+      # which cibuildwheel's cmd-based hooks can't provide — so the bundle
+      # is staged BEFORE cibuildwheel runs, and setup.py's
+      # _check_bundle_present() guard makes any ordering mistake fail
+      # loudly. See ci/build-windows-bundle.sh.
+      - name: Set up MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+
+      - name: Build and stage the Windows bundle
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: ./gwyddionpy-converter/ci/build-windows-bundle.sh
+
+      # macOS: the deployment target lands in the wheel's platform tag via
+      # sysconfig.get_platform(). Pinned to the runner's own OS line and
+      # not lower, deliberately: the Homebrew bottles the bundle is built
+      # from are themselves built for this macOS version, so tagging the
+      # wheel as older would promise compatibility the payload cannot keep.
+      - name: Pin the macOS deployment target
+        if: runner.os == 'macOS'
+        shell: bash
+        run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> "$GITHUB_ENV"
+
+      - name: Build the wheel
+        uses: pypa/cibuildwheel@v4.1.0
+        with:
+          package-dir: gwyddionpy-converter
+          output-dir: wheelhouse
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
   linux:
     name: Build gwyconvert (linux-x86_64)
     runs-on: ubuntu-latest
