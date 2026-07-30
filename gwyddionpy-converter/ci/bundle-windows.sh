@@ -78,35 +78,43 @@ collect_deps() {
 done
 echo "bundled $(find "$BUNDLE_DIR" -maxdepth 1 -name '*.dll' | wc -l | tr -d ' ') DLLs beside gwyconvert.exe"
 
-echo "== Verifying the bundle (clean env, NO GWYDDION_LIBDIR — the user path) =="
-# env -i clears PATH too, which on Windows doubles as the DLL search path,
-# so this proves the exe runs on its bundled DLLs alone. SYSTEMROOT must
-# survive (OS DLLs require it). GWYDDION_LIBDIR is deliberately NOT set:
-# module discovery must succeed via the topdir fallback documented above,
-# because that is all a user's machine has.
+echo "== Verifying the bundle (no PATH, no GWYDDION_LIBDIR — the user path) =="
+# Unset only PATH and GWYDDION_LIBDIR, not env -i's full wipe: PATH doubles
+# as the Windows DLL search path, so dropping it proves the exe runs on its
+# bundled DLLs alone, and GWYDDION_LIBDIR is unset so module discovery must
+# succeed via the topdir fallback documented above. But a real user's
+# machine always has TEMP/USERPROFILE/ComSpec/etc. set, and MSYS2's own
+# `env` (an msys-2.0.dll-linked POSIX shim) apparently needs some baseline
+# environment to spawn a child process at all: `env -i` here previously
+# made gwyconvert.exe exit 127 with zero output before even starting,
+# which is exec-failure territory, not a runtime crash — an artifact of
+# over-stripping the environment past what any real user has, not a bundle
+# defect. ntldd -R had already shown every statically-linked dependency
+# resolved and got copied, which is consistent with this being a test
+# artifact rather than a missing DLL.
 set +e
-OUTPUT="$(env -i SYSTEMROOT="${SYSTEMROOT:-C:\\Windows}" \
+OUTPUT="$(env -u PATH -u GWYDDION_LIBDIR \
   "$BUNDLE_DIR/gwyconvert.exe" --list-formats 2>&1)"
 STATUS=$?
 set -e
 if [ "$STATUS" -ne 0 ] || [ -z "$OUTPUT" ]; then
-  # A silent crash with zero output (as opposed to a printed error) means
-  # gwyconvert.exe or a module couldn't resolve a dependency at load time.
-  # ntldd -R above already proved every *statically imported* DLL resolves
-  # and got copied — so a gap here means something is loaded through a
-  # second layer of dlopen (e.g. a GTK gdk-pixbuf loader or immodule cache
-  # entry) that never appears in anyone's import table. Re-running ntldd
-  # with PATH restricted to just the bundle directory (instead of clearing
-  # it in a subshell we can't introspect) surfaces exactly which dependency
-  # only resolves system-wide and never made it into the bundle.
+  # Still broken even with a realistic environment: now actually chase a
+  # missing dependency, reusing collect_deps above. Prepending (not
+  # replacing) PATH keeps ntldd itself resolvable while preferring the
+  # bundle for resolution; anything collect_deps still finds is a mingw64
+  # dependency that never got copied into $BUNDLE_DIR.
   echo "gwyconvert.exe exited $STATUS; output was:" >&2
   echo "$OUTPUT" >&2
-  echo "-- dependencies resolvable from the bundle directory alone --" >&2
-  echo "-- (OS DLLs will show as \"not found\" too, normally resolved from" >&2
-  echo "-- System32 regardless of PATH; look for mingw64-named entries) --" >&2
-  PATH="$BUNDLE_DIR" ntldd -R "$BUNDLE_DIR/gwyconvert.exe" >&2 || true
-  find "$MODULES_PARENT/gwyddion" \( -name '*.dll' -o -name '*.so' \) -type f |
-    while read -r m; do PATH="$BUNDLE_DIR" ntldd -R "$m" >&2 || true; done
+  echo "-- mingw64 dependencies missing from the bundle directory --" >&2
+  PATH="$BUNDLE_DIR:$PATH"
+  {
+    collect_deps "$BUNDLE_DIR/gwyconvert.exe"
+    find "$MODULES_PARENT/gwyddion" \( -name '*.dll' -o -name '*.so' \) -type f |
+      while read -r m; do collect_deps "$m"; done
+  } | sort -u | while read -r dll; do
+    p="$(cygpath -u "$dll" 2>/dev/null || printf '%s' "$dll")"
+    [ -f "$BUNDLE_DIR/$(basename "$p")" ] || echo "missing: $dll" >&2
+  done
   exit 1
 fi
 printf '%s' "$OUTPUT" | python3 -c \
