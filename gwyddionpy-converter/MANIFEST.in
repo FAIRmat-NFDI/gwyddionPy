@@ -1,1 +1,5 @@
 recursive-include src/gwyddionpy_converter/bin *
+# Windows only: Gwyddion's Win32 module lookup resolves modules at
+# <package>/lib/gwyddion/modules — a sibling of bin/, not inside it (see
+# ci/bundle-windows.sh's layout note). Empty on Linux/macOS bundles.
+recursive-include src/gwyddionpy_converter/lib *

@@ -98,7 +98,25 @@ before-all = "bash {project}/ci/cibw-before-all-macos.sh"
 # duplicate the work and risk undoing the rewrites.
 repair-wheel-command = "cp {wheel} {dest_dir}"
 test-command = "python -c \"import json,subprocess;from gwyddionpy_converter import binary_path;n=len(json.loads(subprocess.run([str(binary_path()),'--list-formats'],capture_output=True,text=True,check=True).stdout));print(f'{n} formats');assert n>100,f'only {n} formats - bundle is missing its plugins'\""
-environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER"]
+# No environment-pass here: that option is Linux-only — it exists to forward
+# variables across the Docker container boundary. macOS and Windows builds
+# run directly on the host, so SETUPTOOLS_SCM_PRETEND_VERSION_FOR_* is
+# already visible to the build without forwarding.
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
+# No before-all here, unlike Linux/macOS: cibuildwheel runs Windows commands
+# under cmd, and the Gwyddion build needs a full MSYS2 MinGW64 shell. The
+# workflow instead runs ci/build-windows-bundle.sh as its own msys2-shell
+# step BEFORE cibuildwheel; setup.py's missing-bundle guard turns any
+# ordering mistake into a loud failure instead of an empty wheel.
+#
+# repair: cibuildwheel's Windows default is delvewheel, which would try to
+# re-bundle DLLs the bundle script already placed (and cannot see the
+# dlopen'd modules' deps in any case). A python one-liner instead of `cp`
+# because this runs under cmd, not a POSIX shell.
+repair-wheel-command = "python -c \"import shutil,sys;shutil.copy(sys.argv[1],sys.argv[2])\" {wheel} {dest_dir}"
+test-command = "python -c \"import json,subprocess;from gwyddionpy_converter import binary_path;n=len(json.loads(subprocess.run([str(binary_path()),'--list-formats'],capture_output=True,text=True,check=True).stdout));print(f'{n} formats');assert n>100,f'only {n} formats - bundle is missing its plugins'\""
 
 [tool.setuptools_scm]
 # Same repo, same tags as gwyddionpy/pyproject.toml's [tool.setuptools_scm]
