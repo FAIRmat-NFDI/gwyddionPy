@@ -15,10 +15,10 @@
 #   - No RPATH/install-name machinery exists. The loader searches the
 #     executable's own directory first, so DLLs beside the .exe simply work.
 #     Nothing is patched, so nothing needs re-signing either.
-#   - Discovery uses ntldd -R (MSYS2's recursive PE dependency walker).
-#     System DLLs are excluded by path: anything resolving outside the
-#     MinGW prefix (KERNEL32, msvcrt, ntdll, ... live in C:\Windows) stays
-#     out; everything from /mingw64 travels.
+#   - Discovery walks each PE's import table via objdump -p, recursively
+#     (see collect_deps below). System DLLs are excluded implicitly: they
+#     never resolve under BUNDLE_DIR, PREFIX/bin, or /mingw64/bin, so only
+#     genuine MinGW64-toolchain DLLs travel.
 #   - As on the other platforms, the dlopen()'d format modules are walked
 #     too: their own DLL deps (libxml2 & co.) appear in no other file's
 #     import table.
@@ -57,24 +57,58 @@ mkdir -p "$BUNDLE_DIR" "$MODULES_PARENT"
 cp "$EXE" "$BUNDLE_DIR/gwyconvert.exe"
 cp -r "$PREFIX/lib/gwyddion" "$MODULES_PARENT/gwyddion"
 
-echo "== Walking DLL dependencies (ntldd -R) =="
-# ntldd -R prints "NAME => PATH (address)" recursively. Keep only deps that
-# resolved inside the MinGW prefix (both /mingw64/... and the Windows-style
-# C:\msys64\mingw64\... spellings appear depending on version); everything
-# else is an OS DLL and must not travel.
-collect_deps() {
-  ntldd -R "$1" 2>/dev/null | awk '$2 == "=>" {print $3}' |
-    grep -Ei '([/\\]|^)mingw64[/\\]' || true
+echo "== Walking DLL dependencies (objdump -p import tables) =="
+# Switched from `ntldd -R`: across two rounds of environment fixes to the
+# verification below (full env wipe, then just PATH/GWYDDION_LIBDIR, then a
+# bash builtin exec with PATH="") gwyconvert.exe kept exiting 127 with zero
+# output — an instant, silent CreateProcess failure, the signature of a
+# required DLL that can't be found — while ntldd -R kept reporting nothing
+# missing, both here and in the post-failure diagnostic below, which share
+# the same resolution logic. That agreement is exactly what you'd see if
+# ntldd -R has a recursion blind spot rather than the bundle being correct.
+# objdump reads each PE's import directory straight off disk, so walking is
+# authoritative and never depends on ntldd's own ability to load/resolve a
+# hop in order to keep recursing past it.
+list_imports() {
+  objdump -p "$1" 2>/dev/null | awk '/DLL Name:/ {print $3}'
 }
 
-{
-  collect_deps "$BUNDLE_DIR/gwyconvert.exe"
-  find "$MODULES_PARENT/gwyddion" \( -name '*.dll' -o -name '*.so' \) -type f |
-    while read -r m; do collect_deps "$m"; done
-} | sort -u | while read -r dll; do
-  # Normalize C:\msys64\mingw64\bin\foo.dll to a copyable POSIX path.
-  p="$(cygpath -u "$dll" 2>/dev/null || printf '%s' "$dll")"
-  [ -f "$p" ] && cp -n "$p" "$BUNDLE_DIR/" || echo "warning: dep not found: $dll" >&2
+# Where a dependency could actually live before bundling copies it in:
+# already-bundled, Gwyddion's own install (PREFIX/bin — libtool's Windows
+# convention for shared libs), then the MinGW64 toolchain itself. System
+# DLLs (kernel32, msvcrt, ntdll, ...) never resolve under any of these three,
+# so they drop out on their own — no path-string filtering needed, unlike
+# the old grep -Ei 'mingw64' approach.
+find_dll() {
+  local name="$1" dir
+  for dir in "$BUNDLE_DIR" "$PREFIX/bin" /mingw64/bin; do
+    [ -f "$dir/$name" ] && { printf '%s\n' "$dir/$name"; return 0; }
+  done
+  return 1
+}
+
+# BFS over the transitive import closure of every path given.
+collect_deps() {
+  local -a queue=("$@")
+  local -A seen=()
+  local path name found
+  while [ "${#queue[@]}" -gt 0 ]; do
+    path="${queue[0]}"
+    queue=("${queue[@]:1}")
+    while read -r name; do
+      [ -n "${seen[$name]:-}" ] && continue
+      seen[$name]=1
+      found="$(find_dll "$name")" || continue
+      printf '%s\n' "$found"
+      queue+=("$found")
+    done < <(list_imports "$path")
+  done
+}
+
+mapfile -t MODULE_FILES < <(find "$MODULES_PARENT/gwyddion" \( -name '*.dll' -o -name '*.so' \) -type f)
+collect_deps "$BUNDLE_DIR/gwyconvert.exe" "${MODULE_FILES[@]}" | sort -u | while read -r dll; do
+  case "$dll" in "$BUNDLE_DIR"/*) continue ;; esac  # already in place
+  cp -n "$dll" "$BUNDLE_DIR/"
 done
 echo "bundled $(find "$BUNDLE_DIR" -maxdepth 1 -name '*.dll' | wc -l | tr -d ' ') DLLs beside gwyconvert.exe"
 
@@ -102,22 +136,14 @@ OUTPUT="$(
 STATUS=$?
 set -e
 if [ "$STATUS" -ne 0 ] || [ -z "$OUTPUT" ]; then
-  # Still broken even with a realistic environment: now actually chase a
-  # missing dependency, reusing collect_deps above. Prepending (not
-  # replacing) PATH keeps ntldd itself resolvable while preferring the
-  # bundle for resolution; anything collect_deps still finds is a mingw64
-  # dependency that never got copied into $BUNDLE_DIR.
+  # Still broken: re-walk with the same objdump-based collect_deps used for
+  # bundling above and report anything not actually present in BUNDLE_DIR by
+  # basename — this is the authoritative check now, not a best-effort retry.
   echo "gwyconvert.exe exited $STATUS; output was:" >&2
   echo "$OUTPUT" >&2
-  echo "-- mingw64 dependencies missing from the bundle directory --" >&2
-  PATH="$BUNDLE_DIR:$PATH"
-  {
-    collect_deps "$BUNDLE_DIR/gwyconvert.exe"
-    find "$MODULES_PARENT/gwyddion" \( -name '*.dll' -o -name '*.so' \) -type f |
-      while read -r m; do collect_deps "$m"; done
-  } | sort -u | while read -r dll; do
-    p="$(cygpath -u "$dll" 2>/dev/null || printf '%s' "$dll")"
-    [ -f "$BUNDLE_DIR/$(basename "$p")" ] || echo "missing: $dll" >&2
+  echo "-- dependencies missing from the bundle directory --" >&2
+  collect_deps "$BUNDLE_DIR/gwyconvert.exe" "${MODULE_FILES[@]}" | sort -u | while read -r dll; do
+    [ -f "$BUNDLE_DIR/$(basename "$dll")" ] || echo "missing: $dll" >&2
   done
   exit 1
 fi
