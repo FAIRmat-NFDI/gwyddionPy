@@ -70,6 +70,7 @@ jobs:
       - name: Pin gwyddionpy-converter to this exact release
         run: |
           VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           python3 - "$VERSION" <<'PY'
           import pathlib, re, sys
 
@@ -95,7 +96,21 @@ jobs:
           print(f"pinned gwyddionpy-converter=={version}")
           PY
 
+      # SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY, not plain git-describe:
+      # the previous step just rewrote gwyddionpy/pyproject.toml in place to
+      # apply the lockstep pin, which leaves the working tree dirty. setuptools-
+      # scm treats a dirty tree as "not a clean release" regardless of commit
+      # distance — even sitting exactly on the release tag it then renders a
+      # version like 0.0.16.post1.dev0+g6368617.d20260731, which TestPyPI
+      # rejects outright (400: local versions are not allowed). Confirmed
+      # 2026-07-31 (run 30626759566): `git describe --tags --long` on that
+      # exact commit gave a clean v0.0.16-0-g6368617, proving distance/tag
+      # visibility was never the issue — the in-place edit was. Pretending the
+      # version sidesteps git state entirely, the same way the converter's
+      # build already does via SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER.
       - name: Build package
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY: ${{ env.VERSION }}
         run: uv build ./gwyddionpy --out-dir dist
 
       # The sed-style edit above only proves the file changed; this proves
