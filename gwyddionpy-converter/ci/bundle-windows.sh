@@ -79,22 +79,26 @@ done
 echo "bundled $(find "$BUNDLE_DIR" -maxdepth 1 -name '*.dll' | wc -l | tr -d ' ') DLLs beside gwyconvert.exe"
 
 echo "== Verifying the bundle (no PATH, no GWYDDION_LIBDIR — the user path) =="
-# Unset only PATH and GWYDDION_LIBDIR, not env -i's full wipe: PATH doubles
-# as the Windows DLL search path, so dropping it proves the exe runs on its
-# bundled DLLs alone, and GWYDDION_LIBDIR is unset so module discovery must
-# succeed via the topdir fallback documented above. But a real user's
-# machine always has TEMP/USERPROFILE/ComSpec/etc. set, and MSYS2's own
-# `env` (an msys-2.0.dll-linked POSIX shim) apparently needs some baseline
-# environment to spawn a child process at all: `env -i` here previously
-# made gwyconvert.exe exit 127 with zero output before even starting,
-# which is exec-failure territory, not a runtime crash — an artifact of
-# over-stripping the environment past what any real user has, not a bundle
-# defect. ntldd -R had already shown every statically-linked dependency
-# resolved and got copied, which is consistent with this being a test
-# artifact rather than a missing DLL.
+# Neither `env -i` (full wipe) nor `env -u PATH -u GWYDDION_LIBDIR` worked:
+# both made gwyconvert.exe exit 127 with zero output, and the collect_deps
+# diagnostic below confirmed every recursively-walked dependency is already
+# present in BUNDLE_DIR — so this isn't a missing-DLL defect. The common
+# factor in both failing attempts was deleting the PATH *key* outright via
+# the external `env` binary. Two changes at once to isolate that:
+#   - exec via a bash subshell instead of the separate `env` binary, so
+#     there's no second MSYS-linked process involved in the fork/exec;
+#     bash never consults PATH to run a name containing a slash anyway.
+#   - set PATH="" (present but empty) instead of unsetting the key. This
+#     still proves DLL search doesn't depend on PATH (empty adds no search
+#     directories), without exercising whatever "PATH has no value at all"
+#     path CreateProcess/CRT startup may handle differently.
+# GWYDDION_LIBDIR is still genuinely unset, so module discovery must still
+# succeed via the topdir fallback documented above.
 set +e
-OUTPUT="$(env -u PATH -u GWYDDION_LIBDIR \
-  "$BUNDLE_DIR/gwyconvert.exe" --list-formats 2>&1)"
+OUTPUT="$(
+  unset GWYDDION_LIBDIR
+  PATH="" "$BUNDLE_DIR/gwyconvert.exe" --list-formats 2>&1
+)"
 STATUS=$?
 set -e
 if [ "$STATUS" -ne 0 ] || [ -z "$OUTPUT" ]; then
