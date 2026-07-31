@@ -39,7 +39,17 @@ jobs:
         with:
           # Full history + tags: setuptools-scm derives the version from
           # git tags, a shallow checkout would produce a bogus version.
+          # fetch-depth: 0 alone is NOT enough — actions/checkout does not
+          # fetch tags just because history is unshallowed; fetch-tags must
+          # be requested explicitly, or git describe can't find v0.0.14 even
+          # while sitting exactly on that commit, and setuptools-scm falls
+          # back to a distance-based dev version like
+          # 0.0.14.post1.dev0+gd433fa913.d20260731 — which PyPI/TestPyPI then
+          # reject outright (400: local versions are not allowed). Confirmed
+          # 2026-07-31: run 30616740273 hit exactly this, with the git hash
+          # in the rejected version matching v0.0.14's commit exactly.
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
