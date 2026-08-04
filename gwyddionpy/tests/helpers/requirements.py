@@ -1,57 +1,47 @@
-"""What a test needs from its environment, and what happens when it is absent.
+"""Checking that a test has the raw file it needs before it runs.
 
-Centralized so the policy is one decision rather than a skipif repeated in
-every module — and so it can be flipped to strict mode in CI.
+The files live in tests/data/ and are committed with the tests, so this is a
+check rather than a fetch: nothing is downloaded and no test reaches outside
+the repository. A missing or altered file is a failure, never a skip — these
+tests exist to read real vendor files, so a run that passes without them would
+be reporting nothing.
 """
-import os
+import hashlib
+from pathlib import Path
 
 import pytest
 
-from gwyddionpy._errors import ConverterNotFoundError
-from gwyddionpy._run import find_converter
 
-try:
-    find_converter()
-    HAVE_CONVERTER = True
-except ConverterNotFoundError:
-    HAVE_CONVERTER = False
-
-#: Turns "skipped because the environment lacks X" into a hard failure.
-#: A suite that silently skips its way to green is the failure mode this
-#: guards against: CI sets this, so missing sample data or an unbuilt
-#: converter can never masquerade as passing tests.
-REQUIRE_ENV_VAR = "GWY_REQUIRE_CONVERTER"
-STRICT = os.environ.get(REQUIRE_ENV_VAR, "") not in ("", "0")
+def checksum(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
-def unavailable(reason: str):
-    """Skip — or fail, when the suite is running in strict mode."""
-    if STRICT:
-        pytest.fail(f"{reason} (and {REQUIRE_ENV_VAR} is set)")
-    pytest.skip(reason)
+def require_specimen(specimen):
+    """Ensure the raw file is present and is the one the reference describes."""
+    if not specimen.exists():
+        pytest.fail(
+            f"{specimen.relpath} is missing from tests/data/. Restore it from "
+            "version control; the specimen files are committed with the tests."
+        )
+    if specimen.sha256:
+        actual = checksum(specimen.path)
+        assert actual == specimen.sha256, (
+            f"{specimen.relpath} does not match its recorded checksum — the "
+            f"file on disk is not the one the reference was captured from.\n"
+            f"  expected {specimen.sha256}\n  got      {actual}"
+        )
 
 
-def require_converter():
-    if not HAVE_CONVERTER:
-        unavailable("gwyconvert not available")
-
-
-def require_sample(sample):
-    """Require a registry sample's raw data file to be present."""
-    require_converter()
-    if not sample.exists():
-        unavailable(f"sample file missing: {sample.path} (see test-data/README.md)")
-
-
-def require_golden(sample):
-    """Require a committed golden reference for a sample.
-
-    A sample with no golden yet is a tracked gap, not an error: a new vendor
-    file lands in the registry before anyone has captured its reference.
-    """
-    require_sample(sample)
-    if not sample.golden_path.is_file():
-        unavailable(
-            f"no golden reference for {sample.filename}; generate it with "
-            f"`python gwyddionpy/tests/make_golden.py {sample.filename}`"
+def require_golden(specimen):
+    """Ensure both the raw file and its reference are available."""
+    require_specimen(specimen)
+    if not specimen.golden_path.is_file():
+        pytest.fail(
+            f"no reference for {specimen.relpath}. Capture one with "
+            f"`python gwyddionpy/tests/make_golden.py {specimen.relpath}`, "
+            "then review the result before committing it."
         )

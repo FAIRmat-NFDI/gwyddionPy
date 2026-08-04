@@ -1,14 +1,12 @@
-"""The golden-reference schema: what "the content of a converted file" means,
-how it is serialized to JSON, and how a fresh conversion is compared to it.
+"""What "the content of a converted file" means, and how two of them compare.
 
-One module owns all three so the writer (make_golden.py) and the readers
-(formats/test_golden.py) can never drift apart.
+The reference for each raw file is a JSON document listing the fields below.
+JSON rather than a stored .gwy because it is readable in review and diffs
+meaningfully when a value moves, and because it does not carry the incidental
+binary differences that two Gwyddion releases produce for identical data.
 
-Why JSON of extracted fields rather than a checked-in reference .gwy: it is
-readable in review, diffs meaningfully when a value changes, and is immune to
-incidental binary differences between Gwyddion versions. The cost is that it
-pins the fields listed here and nothing else — full pixel arrays are
-represented by statistics plus fixed spot samples, not stored verbatim.
+The writer (make_golden.py) and the readers (the format tests) both go through
+this module, so the schema has exactly one definition.
 """
 from __future__ import annotations
 
@@ -20,20 +18,19 @@ import numpy as np
 
 SCHEMA_VERSION = 1
 
-#: Relative tolerance for every float comparison. Tight enough that any real
-#: parsing change (a wrong scale factor, a shifted offset) fails loudly, loose
-#: enough to absorb last-bit differences between compilers, libc versions and
-#: Gwyddion releases — which are not bugs and must not fail CI.
+#: Relative tolerance for float comparisons. Any real change in parsing — a
+#: wrong scale factor, a shifted offset — is orders of magnitude larger than
+#: this, while last-bit differences between compilers, libc versions and
+#: Gwyddion releases fall below it and are not defects.
 RTOL = 1e-9
 
+_NONFINITE_TAGS = ("NaN", "Infinity", "-Infinity")
 
-# --------------------------------------------------------------------------
-# Non-finite floats: NaN/Infinity are not valid JSON. Masked or saturated
-# pixels are a real possibility in SPM data, so tag them as strings and
-# decode symmetrically. Applied only to numeric fields — never to metadata,
-# whose values are vendor strings that may legitimately read "NaN".
-# --------------------------------------------------------------------------
+
 def _encode_float(value) -> object:
+    """NaN and infinities are not valid JSON, and masked or saturated pixels
+    do occur, so tag them as strings. Numeric fields only — metadata values
+    are vendor strings and are never passed through here."""
     value = float(value)
     if math.isnan(value):
         return "NaN"
@@ -43,18 +40,18 @@ def _encode_float(value) -> object:
 
 
 def _decode_float(value) -> float:
-    return float(value)  # float() already parses "NaN"/"Infinity"/"-Infinity"
+    return float(value)  # float() already parses the tags above
 
 
-def spot_indices(shape) -> List[tuple]:
-    """Fixed, shape-derived pixel positions to sample.
+def pixel_positions(shape) -> List[tuple]:
+    """Fixed positions to record for a given image shape.
 
-    Deterministic by construction (no RNG, no seed to remember): corners and
-    interior fractions. Corners catch row/column-order and off-by-one errors,
-    the interior points catch scaling errors that leave the extremes intact.
+    Corners catch row/column ordering and off-by-one errors; the interior
+    fractions catch a scaling change that leaves the extremes looking right.
+    Derived from the shape alone, so there is no seed or state to remember.
     """
     rows, cols = int(shape[0]), int(shape[1])
-    candidates = [
+    positions = [
         (0, 0),
         (0, cols - 1),
         (rows - 1, 0),
@@ -63,45 +60,35 @@ def spot_indices(shape) -> List[tuple]:
         (rows // 3, cols // 4),
         (rows * 2 // 3, cols * 3 // 4),
     ]
-    # dict.fromkeys keeps first-seen order while dropping duplicates, which
-    # tiny images (1x1, 2x2) produce.
-    return list(dict.fromkeys(candidates))
+    # Small images repeat positions; keep first-seen order and drop duplicates.
+    return list(dict.fromkeys(positions))
 
 
 def channel_content(channel) -> dict:
-    """Extract the comparable content of one Channel."""
+    """The comparable content of a single channel."""
     data = np.asarray(channel.data)
-    finite = data[np.isfinite(data)]
     return {
         "shape": list(data.shape),
+        "size": int(data.size),
         "dtype": str(data.dtype),
         "xreal": _encode_float(channel.xreal),
         "yreal": _encode_float(channel.yreal),
         "si_unit_xy": channel.si_unit_xy,
         "si_unit_z": channel.si_unit_z,
-        "stats": {
-            # Computed over finite values only, so one NaN pixel does not
-            # collapse every statistic to NaN and hide the rest of the array.
-            "finite_count": int(finite.size),
-            "min": _encode_float(finite.min()) if finite.size else "NaN",
-            "max": _encode_float(finite.max()) if finite.size else "NaN",
-            "mean": _encode_float(finite.mean()) if finite.size else "NaN",
-            "std": _encode_float(finite.std()) if finite.size else "NaN",
-        },
-        "samples": {
+        "pixels": {
             f"{row},{col}": _encode_float(data[row, col])
-            for row, col in spot_indices(data.shape)
-        },
+            for row, col in pixel_positions(data.shape)
+        } if data.ndim == 2 else {},
         "meta": dict(channel.meta),
     }
 
 
 def extract_content(data) -> dict:
-    """Extract the full comparable content of a parsed file."""
+    """The comparable content of a whole file."""
     return {
         "schema_version": SCHEMA_VERSION,
         "source_format": data.source_format,
-        "channel_names": list(data.channels),   # order is file order, and matters
+        "channel_names": list(data.channels),   # file order, and it matters
         "channels": {
             name: channel_content(channel) for name, channel in data.channels.items()
         },
@@ -109,24 +96,23 @@ def extract_content(data) -> dict:
 
 
 def dump_golden(content: dict, path) -> None:
-    """Write a golden file: stable key order, trailing newline, no NaN."""
+    """Write a reference file: stable key order, trailing newline, valid JSON."""
     path.write_text(
         json.dumps(content, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
         encoding="utf-8",
     )
 
 
-def load_golden(sample) -> dict:
-    return json.loads(sample.golden_path.read_text(encoding="utf-8"))
+def load_golden(specimen) -> dict:
+    return json.loads(specimen.golden_path.read_text(encoding="utf-8"))
 
 
-# --------------------------------------------------------------------------
-# Comparison helpers. Each returns a list of human-readable differences
-# instead of asserting, so a test can report every mismatched field at once
-# rather than dying on the first one.
-# --------------------------------------------------------------------------
 def float_diffs(expected: dict, actual: dict, where: str = "") -> List[str]:
-    """Compare a flat dict of floats within RTOL."""
+    """Compare a flat dict of floats, collecting every mismatch.
+
+    Returns descriptions rather than asserting, so one test run reports all
+    the fields that moved instead of stopping at the first.
+    """
     diffs = []
     for key in sorted(set(expected) | set(actual)):
         if key not in expected:
@@ -144,12 +130,12 @@ def float_diffs(expected: dict, actual: dict, where: str = "") -> List[str]:
 
 
 def meta_diffs(expected: Dict[str, str], actual: Dict[str, str]) -> List[str]:
-    """Compare vendor metadata exactly — these are strings straight out of the
-    file header, and any change is a parsing change worth seeing."""
+    """Compare vendor metadata exactly — these are strings lifted from the
+    file header, so any difference is a difference in how it was read."""
     diffs = []
     for key in sorted(set(expected) | set(actual)):
         if key not in expected:
-            diffs.append(f"{key}: key not in golden (actual {actual[key]!r})")
+            diffs.append(f"{key}: key not in reference (actual {actual[key]!r})")
         elif key not in actual:
             diffs.append(f"{key}: key missing from output (expected {expected[key]!r})")
         elif expected[key] != actual[key]:
@@ -158,7 +144,7 @@ def meta_diffs(expected: Dict[str, str], actual: Dict[str, str]) -> List[str]:
 
 
 def format_diffs(diffs: List[str], limit: int = 20) -> str:
-    """Render a diff list for an assertion message, capped so a wholesale
+    """Render a diff list for an assertion message, capped so that a wholesale
     mismatch does not bury the terminal."""
     shown = diffs[:limit]
     rest = len(diffs) - len(shown)

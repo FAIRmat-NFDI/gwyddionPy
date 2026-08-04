@@ -1,41 +1,38 @@
 #!/usr/bin/env python3
-"""Regenerate the golden reference JSON in tests/golden/.
+"""Capture the golden references that the format tests compare against.
 
-    python gwyddionpy/tests/make_golden.py                  # every sample
-    python gwyddionpy/tests/make_golden.py sample_0.jpk ...  # named samples
+    python gwyddionpy/tests/make_golden.py                       # all files
+    python gwyddionpy/tests/make_golden.py jpk/sample_0.jpk       # one file
+    python gwyddionpy/tests/make_golden.py sample_0.jpk           # same, short
 
-Run this only when a change in output is *understood and intended*, then read
-the resulting git diff: that diff is the review artifact showing exactly what
-moved. Regenerating to make a failing test pass is how a golden suite quietly
-stops testing anything.
-
-Needs a working gwyconvert (GWYDDIONPY_CONVERT or PATH) and the sample files
-in test-data/.
+Each reference is written beside the raw file it describes. Run this when a
+change in output is understood and intended, then read the resulting diff:
+that diff is what shows exactly which values moved and is the thing worth
+reviewing.
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# Standalone script: pytest's `pythonpath` ini option isn't in effect here,
-# so put tests/ on the path the same way pytest would.
+# Run as a script rather than under pytest, so put tests/ on the path the way
+# the pythonpath setting does during a test run.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import gwyddionpy  # noqa: E402
 from helpers import content as content_mod  # noqa: E402
-from helpers.samples import GOLDEN_DIR, SAMPLES, find_sample  # noqa: E402
+from helpers.specimens import SPECIMENS, find_specimen  # noqa: E402
 
 
-def regenerate(sample) -> str:
-    if not sample.exists():
-        return f"SKIP {sample.filename}: not in test-data/"
-    data = gwyddionpy.load(sample.path)
+def capture(specimen) -> str:
+    if not specimen.exists():
+        return f"SKIP  {specimen.relpath}: not present in tests/data/"
+    data = gwyddionpy.load(specimen.path)
     content = content_mod.extract_content(data)
-    GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
-    content_mod.dump_golden(content, sample.golden_path)
+    content_mod.dump_golden(content, specimen.golden_path)
     return (
-        f"WROTE {sample.golden_path.name}: {content['source_format']}, "
-        f"{len(content['channels'])} channel(s)"
+        f"WROTE {specimen.golden_path.relative_to(specimen.path.parents[1])}: "
+        f"{content['source_format']}, {len(content['channels'])} channel(s)"
     )
 
 
@@ -43,17 +40,17 @@ def main(argv) -> int:
     if argv:
         selected = []
         for name in argv:
-            sample = find_sample(name)
-            if sample is None:
-                print(f"error: {name!r} is not in the sample registry "
-                      f"(helpers/samples.py)", file=sys.stderr)
+            specimen = find_specimen(name)
+            if specimen is None:
+                print(f"error: {name!r} is not in the registry "
+                      f"(helpers/specimens.py)", file=sys.stderr)
                 return 2
-            selected.append(sample)
+            selected.append(specimen)
     else:
-        selected = SAMPLES
+        selected = SPECIMENS
 
-    for sample in selected:
-        print(regenerate(sample))
+    for specimen in selected:
+        print(capture(specimen))
     return 0
 
 

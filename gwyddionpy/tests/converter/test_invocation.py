@@ -1,7 +1,9 @@
-"""What happens when gwyddionpy actually runs (or deliberately doesn't run)
-the converter, and what the binary reports about itself.
+"""Running the converter, and the cases where it is deliberately not run.
 
-Split out of the former test_run.py; discovery lives in test_discovery.py.
+Native .gwy input is read directly and must never reach the converter; every
+other format goes through it. The failure paths point the environment
+variable at a path that does not exist, which is the one way to make an
+installed converter unreachable without touching the installation.
 """
 import numpy as np
 import pytest
@@ -12,29 +14,25 @@ from helpers.gwy_builder import make_gwy
 
 
 @pytest.fixture
-def no_converter_anywhere(monkeypatch, tmp_path):
-    monkeypatch.delenv(ENV_VAR, raising=False)
-    empty = tmp_path / "empty-path"
-    empty.mkdir()
-    monkeypatch.setenv("PATH", str(empty))
+def unreachable_converter(monkeypatch):
+    monkeypatch.setenv(ENV_VAR, "/no/such/gwyconvert")
 
 
-def test_raw_load_without_converter_raises(no_converter_anywhere, tmp_path):
-    raw = tmp_path / "scan.spm"
-    raw.write_bytes(b"\x00" * 16)
-    with pytest.raises(gwyddionpy.ConverterNotFoundError):
-        gwyddionpy.load(raw)
-
-
-def test_gwy_load_needs_no_converter(no_converter_anywhere, tmp_path):
-    # Native .gwy input must bypass the converter entirely.
+def test_gwy_input_needs_no_converter(unreachable_converter, tmp_path):
     path = make_gwy(tmp_path / "native.gwy",
                     [{"name": "Height", "data": np.zeros((2, 2))}])
     data = gwyddionpy.load(path)
     assert "Height" in data.channels
 
 
-def test_list_formats_without_converter(no_converter_anywhere):
+def test_raw_input_without_a_converter_raises(unreachable_converter, tmp_path):
+    raw = tmp_path / "scan.spm"
+    raw.write_bytes(b"\x00" * 16)
+    with pytest.raises(gwyddionpy.ConverterNotFoundError):
+        gwyddionpy.load(raw)
+
+
+def test_list_formats_without_a_converter_raises(unreachable_converter):
     with pytest.raises(gwyddionpy.ConverterNotFoundError):
         gwyddionpy.list_formats()
 
@@ -44,26 +42,18 @@ def test_nonexistent_file_raises():
         gwyddionpy.load("/no/such/file.spm")
 
 
-@pytest.mark.converter
-def test_list_formats_reports_known_formats():
-    """Verify gwyconvert reports a real, well-formed format registry.
-
-    Guards against gwyconvert linking against a stub or empty module
-    registry instead of Gwyddion's actual file-format parsers — a broken
-    build could still exit 0 and return an empty or malformed list, and
-    this would be the only test to catch it.
-    """
+def test_list_formats_reports_a_real_registry():
+    """A converter linked against an empty or stubbed module registry would
+    still exit cleanly and return a well-formed empty list, so check that the
+    formats are actually there and that each entry is complete."""
     formats = gwyddionpy.list_formats()
 
-    # Not an exact count on purpose: the system-package build reports 170
-    # (Gwyddion 2.60), the source-tarball build gwyddionpy-converter/ci/build-*.sh
-    # uses reports 185 (Gwyddion 2.71) — both are legitimate, and the
-    # count will keep drifting as Gwyddion gains formats. The floor is what
-    # a genuinely broken registry (this test's actual target) would fail.
+    # The count drifts with the Gwyddion release the converter was built
+    # against, so this is a floor rather than an exact number.
     assert len(formats) >= 170
     names = {fmt["name"] for fmt in formats}
-    assert "nanoscope" in names  # Bruker, exercised end-to-end in formats/
-    assert "gwyfile" in names    # Gwyddion's own native format
+    assert "nanoscope" in names
+    assert "gwyfile" in names
 
     for fmt in formats:
         assert fmt.keys() == {"name", "description", "can_load", "can_save",

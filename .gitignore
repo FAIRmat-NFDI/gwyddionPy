@@ -11,8 +11,11 @@ build/
 gwyddionpy-converter/gwyconvert
 gwyddionpy-converter/*.o
 
-# Test data: fetched rather than committed, except the one sample below
-# (see test-data/README.md for provenance and re-fetch commands)
+# Raw specimen files and their golden references live in
+# gwyddionpy/tests/data/ and are committed alongside the tests.
+
+# Anything still under the older test-data/ is fetched rather than
+# committed, apart from the sample explicitly kept below.
 test-data/*
 !test-data/README.md
 !test-data/VGEP-15m-.0_00000.spm
