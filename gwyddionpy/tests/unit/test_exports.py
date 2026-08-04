@@ -25,7 +25,7 @@ def test_hdf5_round_trip(two_channel_gwy, tmp_path):
 
 
 def test_hdf5_hierarchical_metadata(tmp_path):
-    from conftest import make_gwy
+    from helpers.gwy_builder import make_gwy
 
     path = make_gwy(
         tmp_path / "hier.gwy",
@@ -48,7 +48,7 @@ def test_hdf5_hierarchical_metadata(tmp_path):
 
 
 def test_hdf5_metadata_value_parsing(tmp_path):
-    from conftest import make_gwy
+    from helpers.gwy_builder import make_gwy
 
     path = make_gwy(
         tmp_path / "vals.gwy",
@@ -76,7 +76,7 @@ def test_hdf5_metadata_value_parsing(tmp_path):
 
 
 def test_hdf5_metadata_key_collisions(tmp_path):
-    from conftest import make_gwy
+    from helpers.gwy_builder import make_gwy
 
     path = make_gwy(
         tmp_path / "clash.gwy",
@@ -139,7 +139,7 @@ def test_to_dict(two_channel_gwy):
 
 
 def test_to_dict_hierarchical_metadata(tmp_path):
-    from conftest import make_gwy
+    from helpers.gwy_builder import make_gwy
 
     path = make_gwy(
         tmp_path / "hier.gwy",
@@ -158,7 +158,7 @@ def test_to_dict_hierarchical_metadata(tmp_path):
 
 
 def test_to_dict_metadata_value_parsing(tmp_path):
-    from conftest import make_gwy
+    from helpers.gwy_builder import make_gwy
 
     path = make_gwy(
         tmp_path / "vals.gwy",
@@ -179,7 +179,7 @@ def test_to_dict_metadata_value_parsing(tmp_path):
 
 
 def test_to_dict_metadata_key_collisions(tmp_path):
-    from conftest import make_gwy
+    from helpers.gwy_builder import make_gwy
 
     path = make_gwy(
         tmp_path / "clash.gwy",
@@ -207,7 +207,7 @@ def test_to_dict_flat_metadata_option(two_channel_gwy):
 
 
 def test_to_dict_channel_name_with_slash(tmp_path):
-    from conftest import make_gwy
+    from helpers.gwy_builder import make_gwy
 
     path = make_gwy(tmp_path / "slash.gwy",
                     [{"name": "Amplitude/Error", "data": np.zeros((2, 2))}])
@@ -219,7 +219,7 @@ def test_to_dict_channel_name_with_slash(tmp_path):
 
 
 def test_hdf5_channel_name_with_slash(tmp_path):
-    from conftest import make_gwy
+    from helpers.gwy_builder import make_gwy
 
     path = make_gwy(tmp_path / "slash.gwy",
                     [{"name": "Amplitude/Error", "data": np.zeros((2, 2))}])

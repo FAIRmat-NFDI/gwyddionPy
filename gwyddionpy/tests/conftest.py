@@ -1,36 +1,35 @@
-"""Shared fixtures. Fixtures build real .gwy files with the gwyfile writer —
-no mocks: the same library that parses production files parses these."""
+"""Root fixtures and the collection-time skip policy.
+
+Layout (see FullTestPlan.md §5):
+  unit/       pure Python, no converter binary, no sample data — always runs
+  converter/  needs a built gwyconvert
+  formats/    needs gwyconvert *and* the real vendor files in test-data/
+  helpers/    the framework itself (importable via pyproject's `pythonpath`)
+  golden/     JSON reference content, one file per sample
+"""
 import numpy as np
 import pytest
-from gwyfile.objects import GwyContainer, GwyDataField, GwySIUnit
+
+from helpers.gwy_builder import make_gwy
+from helpers.requirements import HAVE_CONVERTER, STRICT
 
 
-def make_gwy(path, channels):
-    """Write a .gwy file. channels: list of dicts with keys
-    name, data, xreal, yreal, unit_xy, unit_z, meta (all optional but data)."""
-    container = GwyContainer()
-    for num, spec in enumerate(channels):
-        field = GwyDataField(
-            np.asarray(spec["data"], dtype="f8"),
-            xreal=spec.get("xreal", 1.0),
-            yreal=spec.get("yreal", 1.0),
-            si_unit_xy=(
-                GwySIUnit(unitstr=spec["unit_xy"]) if "unit_xy" in spec else None
-            ),
-            si_unit_z=(
-                GwySIUnit(unitstr=spec["unit_z"]) if "unit_z" in spec else None
-            ),
-        )
-        container[f"/{num}/data"] = field
-        if "name" in spec:
-            container[f"/{num}/data/title"] = spec["name"]
-        if "meta" in spec:
-            meta = GwyContainer()
-            for key, value in spec["meta"].items():
-                meta[key] = value
-            container[f"/{num}/meta"] = meta
-    container.tofile(str(path))
-    return path
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip anything marked `converter` when no binary is available, so
+    individual modules don't each repeat a skipif. In strict mode nothing is
+    skipped — the tests run and fail, which is the point.
+
+    Checks the marker via get_closest_marker rather than `in item.keywords`:
+    keywords also contain the enclosing directory names, so the latter would
+    match every test under converter/ — including the discovery tests that
+    deliberately run *without* a binary.
+    """
+    if HAVE_CONVERTER or STRICT:
+        return
+    marker = pytest.mark.skip(reason="gwyconvert not available")
+    for item in items:
+        if item.get_closest_marker("converter") is not None:
+            item.add_marker(marker)
 
 
 @pytest.fixture

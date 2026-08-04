@@ -76,7 +76,7 @@ version_scheme = "no-guess-dev"
 local_scheme = "node-and-date"
 
 [tool.ruff]
-include = ["src/gwyddionpy/*.py", "src/gwyddionpy/**/*.py", "tests/*.py"]
+include = ["src/gwyddionpy/*.py", "src/gwyddionpy/**/*.py", "tests/*.py", "tests/**/*.py"]
 lint.select = [
     "E", # pycodestyle
     "W", # pycodestyle
@@ -110,7 +110,11 @@ disable_error_code = "import, annotation-unchecked"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Makes tests/helpers/ importable from every test group without sys.path
+# juggling in conftest (pytest's own ini option, >=7.0).
+pythonpath = ["tests"]
 markers = [
     "corpus: tests needing full-size raw files fetched from the corpus host",
     "converter: tests needing a built gwyconvert binary",
+    "formats: tests needing real vendor sample files in test-data/",
 ]
