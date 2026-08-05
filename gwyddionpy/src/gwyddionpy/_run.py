@@ -17,6 +17,22 @@ from ._errors import ConversionError, ConverterNotFoundError, UnsupportedFormatE
 ENV_VAR = "GWYDDIONPY_CONVERT"
 BINARY_NAME = "gwyconvert"
 
+#: Seconds to let the converter run before giving up on it. Deliberately
+#: generous: it exists to turn an indefinite hang into a bounded, reported
+#: failure, not to police how long a legitimate conversion may take. Large
+#: scans are slow, and a caller who needs longer passes ``timeout=``.
+DEFAULT_TIMEOUT = 300.0
+
+#: Why a raw file that no module claims usually is not claimed. The
+#: converter's own message says only that nothing could load the file, which
+#: leaves the caller with nowhere to go next.
+_UNREADABLE_CAUSES = (
+    "the format is not one Gwyddion can read",
+    "the file is empty, truncated, or incomplete",
+    "its contents do not match what the file name suggests",
+    "it was altered or corrupted in storage or transfer",
+)
+
 
 def find_converter(explicit: Optional[str] = None) -> str:
     """Resolve the gwyconvert binary, in this order:
@@ -70,23 +86,44 @@ def find_converter(explicit: Optional[str] = None) -> str:
 
 
 def run_converter(
-    input_path: Path, output_path: Path, converter: Optional[str] = None
+    input_path: Path,
+    output_path: Path,
+    converter: Optional[str] = None,
+    timeout: Optional[float] = None,
 ) -> Optional[str]:
     """Convert ``input_path`` to a .gwy file at ``output_path``.
 
     Returns the name of the Gwyddion file module that parsed the input, or
-    None if the converter did not report one.
+    None if the converter did not report one. Gives up after ``timeout``
+    seconds (``DEFAULT_TIMEOUT`` when not given).
     """
     binary = find_converter(converter)
-    proc = subprocess.run(
-        [binary, str(input_path), str(output_path)],
-        capture_output=True,
-        text=True,
-    )
+    if timeout is None:
+        timeout = DEFAULT_TIMEOUT
+    try:
+        proc = subprocess.run(
+            [binary, str(input_path), str(output_path)],
+            capture_output=True,
+            text=True,
+            check=False,      # the return code is inspected below
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as expired:
+        # subprocess.run has already killed the child and reaped it, so
+        # there is nothing left running by the time this is raised.
+        raise ConversionError(
+            f"{BINARY_NAME} did not finish within {timeout:g} s while reading "
+            f"{input_path}, and was stopped. Pass a larger timeout= if the "
+            "file is genuinely this slow to read."
+        ) from expired
+
     if proc.returncode != 0:
         message = proc.stderr.strip() or f"exit code {proc.returncode}"
         if "cannot load" in message:
-            raise UnsupportedFormatError(message)
+            raise UnsupportedFormatError(
+                f"{message}\nPossible reasons: "
+                f"{'; '.join(_UNREADABLE_CAUSES)}."
+            )
         raise ConversionError(message)
 
     try:
@@ -95,12 +132,27 @@ def run_converter(
         return None
 
 
-def query_formats(converter: Optional[str] = None) -> list:
+def query_formats(
+    converter: Optional[str] = None, timeout: Optional[float] = None
+) -> list:
     """Return the converter's --list-formats output as a list of dicts."""
     binary = find_converter(converter)
-    proc = subprocess.run(
-        [binary, "--list-formats"], capture_output=True, text=True
-    )
+    if timeout is None:
+        timeout = DEFAULT_TIMEOUT
+    try:
+        proc = subprocess.run(
+            [binary, "--list-formats"],
+            capture_output=True,
+            text=True,
+            check=False,      # the return code is inspected below
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as expired:
+        raise ConversionError(
+            f"{BINARY_NAME} did not list its formats within {timeout:g} s, "
+            "and was stopped."
+        ) from expired
+
     if proc.returncode != 0:
         raise ConversionError(proc.stderr.strip() or "cannot list formats")
     return json.loads(proc.stdout)
