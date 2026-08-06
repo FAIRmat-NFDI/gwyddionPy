@@ -11,6 +11,7 @@ leaf with a parsed unit. No file I/O, no extra dependencies.
 from __future__ import annotations
 
 from .._metatree import MetaLeaf, build_tree
+from . import channel_keys
 
 
 def _tree_to_plain(tree):
@@ -25,12 +26,13 @@ def _tree_to_plain(tree):
 
 
 def to_dict(data, hierarchical_meta: bool = True) -> dict:
+    # Keys are sanitized the same way the HDF5 export does it, so both
+    # exports lay channels out identically (original name kept below).
+    keys = channel_keys(data.channels)
     return {
         "source_format": data.source_format,
         "channels": {
-            # "/" is HDF5's path separator; sanitized here too so both
-            # exports key channels identically (original name kept below).
-            name.replace("/", "_"): {
+            keys[name]: {
                 "name": name,
                 "xreal": channel.xreal,
                 "yreal": channel.yreal,

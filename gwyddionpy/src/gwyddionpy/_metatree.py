@@ -22,7 +22,18 @@ _GROUP_PREFIX = re.compile(r"^(\d+):(.+)$")
 # "<number> <unit>" where the unit must not itself start like a number,
 # so list-valued entries such as "0.05 0.05" stay whole strings.
 _NUMBER_WITH_UNIT = re.compile(
-    r"^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s+([^\s\d+.-].*)$")
+    r"^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s+([^\s\d+.-].*)$", re.ASCII)
+# A number written the way an instrument writes one. Deliberately matched
+# before calling int()/float() rather than relying on them to reject
+# anything: int("1_000") is 1000 (PEP 515 digit separators) and int("２３")
+# is 23 (non-ASCII decimal digits), so a vendor string that merely looks
+# numeric would come back as a different value with the original text lost.
+_PLAIN_NUMBER = re.compile(
+    r"^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$", re.ASCII)
+# "NaN"/"inf" name floats and have always been stored as such: an instrument
+# writing them means "no reading here", which a numeric consumer wants as a
+# float rather than as text.
+_SPECIAL_NUMBER = re.compile(r"^[+-]?(?:nan|inf|infinity)$", re.IGNORECASE)
 
 
 class MetaLeaf(NamedTuple):
@@ -40,11 +51,13 @@ def split_value(value):
     if not isinstance(value, str):
         return value, None
     s = value.strip()
-    for cast in (int, float):
+    if _PLAIN_NUMBER.match(s):
         try:
-            return cast(s), None
+            return int(s), None
         except ValueError:
-            pass
+            return float(s), None
+    if _SPECIAL_NUMBER.match(s):
+        return float(s), None
     m = _NUMBER_WITH_UNIT.match(s)
     if m:
         number, unit = m.groups()

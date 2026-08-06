@@ -19,6 +19,7 @@ the flat ``meta`` group — much more compact, no value/unit splitting.
 from __future__ import annotations
 
 from .._metatree import MetaLeaf, build_tree
+from . import channel_keys
 
 
 def _write_tree(group, tree):
@@ -48,9 +49,11 @@ def write(data, path, compression: str = "gzip",
     with h5py.File(path, "w") as f:
         f.attrs["source_format"] = data.source_format or ""
         root = f.create_group("channels")
+        # "/" is the HDF5 path separator and cannot appear in a group name;
+        # channel_keys also keeps two channels that sanitize alike apart.
+        keys = channel_keys(data.channels)
         for name, ch in data.channels.items():
-            # "/" is the HDF5 path separator and cannot appear in a name.
-            group = root.create_group(name.replace("/", "_"))
+            group = root.create_group(keys[name])
             group.attrs["name"] = name
             group.attrs["xreal"] = ch.xreal
             group.attrs["yreal"] = ch.yreal
