@@ -153,6 +153,16 @@ cat > "$BUNDLE_DIR/gwyconvert" <<'WRAPPER'
 # install names bundle-macos.sh rewrote instead.
 here="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 export GWYDDION_LIBDIR="$here/lib"
+# Keep stderr for real diagnostics. GTK otherwise tries to load the
+# accessibility modules (gail, atk-bridge) and GdkPixbuf looks for a loader
+# cache at the path baked in by the build container, which exists on no
+# user's machine — three warnings on every run, successful ones included,
+# ending in advice to run a command as root that would not help. None of it
+# is needed: gwyconvert draws nothing and the bundle ships no pixmap module.
+# Verified that clearing both leaves the format list and every conversion
+# unchanged.
+export GTK_MODULES=""
+export GDK_PIXBUF_MODULE_FILE=/dev/null
 exec "$here/lib/gwyconvert.real" "$@"
 WRAPPER
 chmod +x "$BUNDLE_DIR/gwyconvert"

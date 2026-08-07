@@ -5,7 +5,12 @@ all in one place:
 
 - `gwyconvert.c` + `Makefile` — the headless C converter that links
   Gwyddion's libraries. The Makefile builds against an already-installed
-  Gwyddion, which is the local development path.
+  Gwyddion, which is the local development path. Its command-line contract
+  — usage, exit codes, what goes on stdout and stderr — is written up in
+  [`docs/user/gwyconvert-cli.md`](https://github.com/FAIRmat-NFDI/gwyddionPy/blob/main/docs/user/gwyconvert-cli.md);
+  `gwyddionpy` depends on it, and the two packages are released
+  separately, so treat it as an interface rather than an implementation
+  detail.
 - `ci/` — the release recipe: `build-gwyddion.sh` builds Gwyddion itself
   from its official source tarball, and the `bundle-*.sh` scripts turn the
   result into a portable, self-contained bundle per platform.

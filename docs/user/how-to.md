@@ -129,3 +129,9 @@ Then try a real measurement file:
 ```bash
 python3 -c "import gwyddionpy; d = gwyddionpy.load('your_scan_file'); print(list(d.channels))"
 ```
+## Using `gwyconvert` on its own
+
+The helper binary is a normal command-line program, so a shell script or a
+workflow with no Python in it can convert files directly. Its usage, exit
+codes and output are described in
+[`gwyconvert-cli.md`](gwyconvert-cli.md).

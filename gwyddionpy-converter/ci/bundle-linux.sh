@@ -85,6 +85,16 @@ export GWYDDION_LIBDIR="$here/lib"
 # dlopen()'d object, so without this only libraries already loaded into the
 # process (the core Gwyddion/GTK ones) would resolve.
 export LD_LIBRARY_PATH="$here/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Keep stderr for real diagnostics. GTK otherwise tries to load the
+# accessibility modules (gail, atk-bridge) and GdkPixbuf looks for a loader
+# cache at the path baked in by the build container, which exists on no
+# user's machine — three warnings on every run, successful ones included,
+# ending in advice to run a command as root that would not help. None of it
+# is needed: gwyconvert draws nothing and the bundle ships no pixmap module.
+# Verified that clearing both leaves the format list and every conversion
+# unchanged.
+export GTK_MODULES=""
+export GDK_PIXBUF_MODULE_FILE=/dev/null
 exec "$here/lib/gwyconvert.real" "$@"
 WRAPPER
 chmod +x "$BUNDLE_DIR/gwyconvert"

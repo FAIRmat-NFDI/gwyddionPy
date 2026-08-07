@@ -75,6 +75,17 @@ def converter_environment() -> dict:
         for category in _OTHER_LOCALE_CATEGORIES:
             env[category] = lc_all
     env["LC_NUMERIC"] = "C"
+
+    # Keep the converter's stderr for real diagnostics. GTK otherwise tries
+    # to load its accessibility modules and GdkPixbuf looks for a loader
+    # cache at a path that only exists inside the build container, producing
+    # several warnings on every run — successful ones included — which then
+    # end up quoted in this package's own error messages. gwyconvert draws
+    # nothing and the bundle carries no pixmap module, so neither is needed;
+    # the format list and every conversion are unchanged with both cleared.
+
+    env["GTK_MODULES"] = ""
+    env["GDK_PIXBUF_MODULE_FILE"] = os.devnull
     return env
 
 
