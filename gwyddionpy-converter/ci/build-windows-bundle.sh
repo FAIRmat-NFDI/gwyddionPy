@@ -3,30 +3,30 @@
 # the wheel's package data. Runs in an MSYS2 MinGW64 shell (msys2/setup-msys2
 # provides it in CI).
 #
-# Unlike Linux/macOS this is NOT a cibuildwheel `before-all`: cibuildwheel
-# runs Windows commands under cmd, and threading a full MSYS2 login shell
-# through that is exactly the kind of quoting fragility this project does
-# not need. Instead the workflow runs this script as its own step (in the
-# msys2 shell) BEFORE invoking cibuildwheel; setup.py's
-# _check_bundle_present() guard turns any ordering mistake into a loud
-# build failure rather than an empty wheel.
+# Unlike Linux and macOS this is NOT a cibuildwheel `before-all`:
+# cibuildwheel runs Windows commands under cmd, and threading a full MSYS2
+# login shell through that is needless quoting fragility. build-converter.yml
+# runs this script as its own msys2 step BEFORE cibuildwheel instead — the
+# two must stay in that order, and setup.py's _check_bundle_present() turns
+# a mistake into a loud failure rather than an empty wheel.
 #
-# Package facts verified 2026-07-29 (packages.msys2.org): mingw-w64-gtk2 is
-# GTK2 2.24.33-8, present in the mingw64 repo. ntldd is the recursive PE
-# dependency walker bundle-windows.sh needs.
+# Packages come from the MSYS2 mingw64 repo (mingw-w64-x86_64-gtk2 is GTK2
+# 2.24.x): https://packages.msys2.org/
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "== Installing Gwyddion build dependencies (pacman) =="
+# The toolchain group also supplies binutils, hence objdump, which
+# bundle-windows.sh uses to walk PE import tables. python runs the
+# format-count assertions in build-gwyddion.sh and bundle-windows.sh.
 pacman -S --noconfirm --needed \
   mingw-w64-x86_64-toolchain \
   mingw-w64-x86_64-gtk2 \
   mingw-w64-x86_64-fftw \
   mingw-w64-x86_64-libxml2 \
   mingw-w64-x86_64-pkgconf \
-  mingw-w64-x86_64-ntldd \
   mingw-w64-x86_64-python \
   make gettext-devel
 

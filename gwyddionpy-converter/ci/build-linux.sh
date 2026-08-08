@@ -1,25 +1,18 @@
 #!/usr/bin/env bash
-# Build a self-contained, releasable gwyconvert tarball for linux-x86_64.
+# Build the self-contained gwyconvert tarball released for linux-x86_64.
 #
-# Two thin steps on top of the shared recipes:
-#   1. build-gwyddion.sh — build Gwyddion from source (--without-gl) and
-#      gwyconvert against it. Shared with pytest.yml.
-#   2. bundle-linux.sh   — make the result relocatable. Shared with
-#      cibw-before-all-linux.sh (V1d-2).
-# Everything specific to *this* script is the packaging below: producing
-# the `gwyconvert-linux-x86_64.tar.gz` GitHub Release asset that
-# gwyddionpy's _fetch_converter.py downloads. The wheel path does not go
-# through here — it bundles straight into package data.
+# Two shared steps plus packaging:
+#   1. build-gwyddion.sh — Gwyddion from source, then gwyconvert.
+#   2. bundle-linux.sh   — make the result relocatable.
+#   3. tar + sha256      — the only part unique to this script.
 #
-# `--without-gl` (in build-gwyddion.sh) drops the OpenGL/GLX/gtkglext
-# dependency entirely (verified 2026-07-21 by hand — see
-# V1_IMPLEMENTATION.md: the system package's gwyddion.pc Requires
-# gtkglext, the tarball build's doesn't, and a real conversion of a Bruker
-# sample file through gwyddionpy.load() produces identical output either
-# way), which matters specifically here because a *released* binary needs
-# to be minimal and portable, not just working in-place.
-
-# Produces $OUT_DIR/gwyconvert-linux-x86_64.tar.gz + a matching .sha256.
+# Output: $OUT_DIR/gwyconvert-linux-x86_64.tar.gz and a matching .sha256,
+# attached to the GitHub Release by .github/workflows/build-converter.yml
+# and downloaded by gwyddionpy's _fetch_converter.py. Renaming ASSET_NAME
+# means updating _fetch_converter._asset_name() to match.
+#
+# The wheels do NOT go through this script: cibw-before-all-linux.sh calls
+# bundle-linux.sh directly, straight into the wheel's package data.
 set -euo pipefail
 
 OUT_DIR="${OUT_DIR:-$PWD/dist-converter}"

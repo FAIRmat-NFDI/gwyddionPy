@@ -1,30 +1,87 @@
 # How to install gwyddionpy
 
-gwyddionpy is two pieces: the `gwyddionpy` Python package (pure Python,
-Apache-2.0) and the `gwyconvert` helper binary (GPL-2.0-or-later, since it
-links Gwyddion) that does the actual file-format conversion. The Python
-package never bundles the binary — you always get it separately, one of
-two ways:
+gwyddionpy is two pieces:
 
-1. **Build everything yourself** on a fresh Linux machine — works on any
-   distro with Gwyddion packaged, no dependency on this project's own CI.
-2. **Download a prebuilt binary** from this project's GitHub Releases —
-   faster, no C toolchain needed, currently Linux-only.
+- the **`gwyddionpy` Python package** — pure Python, Apache-2.0;
+- the **`gwyconvert` helper binary** — GPL-2.0-or-later, because it links
+  [Gwyddion](http://gwyddion.net); it does the actual format conversion.
 
-Pick whichever fits; both end with the same working `gwyddionpy` install.
+The Python package never bundles the binary. You always install the two
+separately, and there are three ways to get the binary:
 
-## 1. Installation on a fresh Linux distro (build it yourself)
+1. **The companion wheel** — one `pip install`, nothing to build. Linux
+   x86_64, macOS (Apple Silicon and Intel), Windows x86_64.
+2. **A prebuilt binary from a GitHub Release** — no GPL package in your
+   environment. linux-x86_64 only.
+3. **Build it yourself** — any platform with Gwyddion available.
 
-### a. Installation
+All three end with the same working install. Option 1 unless you have a
+reason to prefer another.
+
+> **TestPyPI note.** Both packages are published to TestPyPI only for now,
+> so every `pip install` below carries two index flags. Drop them once the
+> packages reach production PyPI.
+
+## Option 1 — the companion wheel
 
 ```bash
-# 1. Gwyddion + build tools. `gwyddion` itself is required, not just the
-#    -dev package — the actual file-format module plugins are packaged
-#    under `gwyddion`, not libgwyddion20-dev (see docs/BUILD.md).
-sudo apt install libgwyddion20-dev gwyddion libgtk2.0-dev libfftw3-dev \
-                  build-essential pkg-config git
+python3 -m venv .venv
+source .venv/bin/activate
 
-# 2. This repository, and the converter binary
+pip install -i https://test.pypi.org/simple/ \
+            --extra-index-url https://pypi.org/simple/ \
+            "gwyddionpy[converter]"
+```
+
+That is all. The `[converter]` extra pulls `gwyddionpy-converter`, which
+ships `gwyconvert` as package data; gwyddionpy finds it automatically, with
+no environment variable to set. Skip to [Verify](#verify).
+
+The extra is opt-in on purpose: a plain `pip install gwyddionpy` stays
+entirely Apache-2.0, so requesting the GPL binary is always your explicit
+choice.
+
+## Option 2 — a prebuilt binary from a GitHub Release
+
+Useful when you want the binary without a GPL package in your environment.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install -i https://test.pypi.org/simple/ \
+            --extra-index-url https://pypi.org/simple/ \
+            gwyddionpy
+
+gwyddionpy-fetch-converter
+```
+
+`gwyddionpy-fetch-converter` downloads the binary for your platform,
+verifies its checksum, and unpacks it into a per-user cache directory that
+gwyddionpy searches automatically — again, no environment variable. It is
+also callable from Python as `gwyddionpy.ensure_converter()`.
+
+This step never runs on its own: not during `pip install`, not on
+`import gwyddionpy`. It also never touches `apt`/`dnf`/`brew` and needs no
+privileges — it is an HTTPS download.
+
+Only `linux-x86_64` is published this way; on any other platform the command
+exits with a clear error. Use option 1 or 3 there.
+
+## Option 3 — build gwyconvert yourself
+
+Works on any distribution that packages Gwyddion, and depends on no CI
+artifact of this project.
+
+```bash
+# 1. Gwyddion + build tools.
+#    `gwyddion` itself is required, not only the -dev package: Debian and
+#    Ubuntu ship the file-format plugins in `gwyddion`, and without them
+#    gwyconvert builds and runs but recognizes zero formats.
+sudo apt install libgwyddion20-dev gwyddion libgtk2.0-dev libfftw3-dev \
+                 build-essential pkg-config git
+
+# 2. The repository, and the converter binary
 git clone https://github.com/FAIRmat-NFDI/gwyddionPy.git
 cd gwyddionPy
 make -C gwyddionpy-converter
@@ -33,88 +90,42 @@ make -C gwyddionpy-converter
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -i https://test.pypi.org/simple/ \
-             --extra-index-url https://pypi.org/simple/ \
-             gwyddionpy
-# (gwyddionpy is on TestPyPI only for now — drop the two -i/--extra-index-url
-# flags above once it's on production PyPI; docs/MAINTENANCE.md tracks that)
+            --extra-index-url https://pypi.org/simple/ \
+            gwyddionpy
 
 # 4. Point gwyddionpy at the binary you just built
 export GWYDDIONPY_CONVERT=$PWD/gwyddionpy-converter/gwyconvert
 ```
 
-Not on Debian/Ubuntu? Install Gwyddion via your distro's package manager
-(the package names above are Debian/Ubuntu's; e.g. Fedora's is `gwyddion`
-+ `gwyddion-devel`) instead of `apt`, then continue from step 2 — or use
-the **source tarball build** in `docs/BUILD.md` to build Gwyddion itself
-from its official release tarball instead of relying on any distro
-package at all.
+Package names above are Debian's and Ubuntu's. On other distributions
+install the equivalents (Fedora: `gwyddion` + `gwyddion-devel`) and continue
+from step 2.
 
-### b. Check the installation works
+To avoid distribution packages entirely, build Gwyddion itself from its
+official source tarball with `gwyddionpy-converter/ci/build-gwyddion.sh` —
+the same script this project's CI and release builds use. It takes
+`WORK_DIR`, `PREFIX` and `GWYCONVERT_OUT` from the environment and produces
+a `gwyconvert` linked against its own Gwyddion.
+
+## Verify
 
 ```bash
-python3 -c "import gwyddionpy; formats = gwyddionpy.list_formats(); print(len(formats), 'formats')"
+python3 -c "import gwyddionpy; print(len(gwyddionpy.list_formats()), 'formats')"
 ```
 
-Expect a number well over 100 (170+ is typical). **Zero is the specific
-failure mode to watch for** — a broken build can link and run perfectly
-fine while silently registering no formats at all (this project hit that
-exact bug twice; see `V1_IMPLEMENTATION.md` if you're curious). If you get
-`ConverterNotFoundError` instead, `GWYDDIONPY_CONVERT` isn't set correctly
-or `make -C gwyddionpy-converter` didn't produce a binary — re-check step 2/4 above.
+Expect a number well over 100; ~170 is typical.
 
-Once that works, try it on a real file:
+**Zero is the failure mode to watch for.** A converter that cannot find
+Gwyddion's format plugins still starts and exits cleanly — it simply
+registers nothing. If you see zero after option 3, the `gwyddion` package
+from step 1 is the first thing to check.
+
+`ConverterNotFoundError` instead means no binary was found at all: check
+that `GWYDDIONPY_CONVERT` points at a real file, or that step 2 actually
+produced one.
+
+Then try a real measurement file:
 
 ```bash
 python3 -c "import gwyddionpy; d = gwyddionpy.load('your_scan_file'); print(list(d.channels))"
 ```
-
-## 2. Installation from the prebuilt GitHub binary
-
-No C toolchain, no Gwyddion system packages — `gwyddionpy` fetches an
-already-built `gwyconvert` for you.
-
-**Status — this doesn't work yet, on either side:** the `gwyddionpy`
-package currently published on TestPyPI (`0.0.0`) predates the fetch-helper
-code itself — `gwyddionpy-fetch-converter` isn't in it at all yet (verified
-by hand: installing that exact package and running the command gives "No
-such file"). Separately, `.github/workflows/build-converter.yml` hasn't
-completed a real run either, so there's no binary on a GitHub Release to
-fetch even once a new package version ships it. This section describes the
-intended flow for once both catch up; use option 1 until then.
-
-### a. Installation
-
-```bash
-# 1. A Python environment with the gwyddionpy package
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -i https://test.pypi.org/simple/ \
-             --extra-index-url https://pypi.org/simple/ \
-             gwyddionpy
-# (same TestPyPI note as option 1 — drop those two flags once it's on
-# production PyPI)
-
-# 2. Download the prebuilt gwyconvert for your platform
-gwyddionpy-fetch-converter
-```
-
-That's it — no environment variable to set. `gwyddionpy-fetch-converter`
-downloads the binary (checksum-verified) into a per-user cache directory,
-and `gwyddionpy` finds it there automatically from then on. It's also
-callable from Python directly: `gwyddionpy.ensure_converter()`.
-
-This step never runs on its own — not during `pip install`, not on
-`import gwyddionpy` — you always trigger it explicitly. It also never
-touches `apt`/`dnf`/`brew`; it's a plain HTTPS download.
-
-### b. Check the installation works
-
-Same check as option 1:
-
-```bash
-python3 -c "import gwyddionpy; formats = gwyddionpy.list_formats(); print(len(formats), 'formats')"
-```
-
-Expect well over 100 formats, not zero, and no `ConverterNotFoundError`.
-If `gwyddionpy-fetch-converter` reported a download error, re-run it with
-`--force` after checking your network, or fall back to option 1.

@@ -5,30 +5,31 @@
 # Inputs (all required, via environment):
 #   PREFIX            Gwyddion install prefix from build-gwyddion.sh
 #   BUILT_GWYCONVERT  path to the gwyconvert Mach-O just built against it
-#   BUNDLE_DIR        destination; ends up holding `gwyconvert` + `lib/`
+#   BUNDLE_DIR        destination; ends up holding `gwyconvert` + `lib/`.
+#                     gwyddionpy_converter.binary_path() expects that name.
 #
-# This is NOT a mechanical translation of the Linux script — three things
-# genuinely differ, and getting any of them wrong produces a bundle that
-# works on the builder and fails everywhere else:
+# Not a mechanical translation of the Linux script: three things genuinely
+# differ, and getting any of them wrong yields a bundle that works on the
+# build machine and fails everywhere else.
 #
-# 1. `otool -L` lists only DIRECT dependencies, where `ldd` lists the full
-#    transitive closure. So this script walks the graph itself; a flat
+# 1. `otool -L` lists DIRECT dependencies only, where `ldd` gives the full
+#    transitive closure — so this script walks the graph itself. A flat
 #    one-pass copy would miss every second-level library.
-# 2. There is no LD_LIBRARY_PATH escape hatch. macOS System Integrity
-#    Protection strips DYLD_* variables when a protected binary (including
-#    /bin/sh, which runs the wrapper) spawns a child, so the Linux trick of
-#    exporting a library path from the wrapper cannot work here. Every
-#    reference must instead be rewritten to @loader_path — which is also
-#    what `delocate` does, and is the more robust approach regardless.
-# 3. Editing a Mach-O invalidates its code signature, and macOS then refuses
-#    to load it (hard failure on Apple Silicon). Every file this script
-#    rewrites must be re-signed ad-hoc afterwards.
+# 2. There is no LD_LIBRARY_PATH escape hatch. System Integrity Protection
+#    strips DYLD_* variables when a protected binary (/bin/sh, which runs
+#    the wrapper, among them) spawns a child, so the Linux trick of
+#    exporting a library path cannot work. Every reference is rewritten to
+#    @loader_path instead — what `delocate` does, and more robust anyway.
+#    https://developer.apple.com/library/archive/documentation/Security/Conceptual/System_Integrity_Protection_Guide/RuntimeProtections/RuntimeProtections.html
+# 3. Editing a Mach-O invalidates its code signature, after which macOS
+#    refuses to load it — a hard failure on Apple Silicon. Every file
+#    rewritten here must be re-signed.
 #
-# Bundling policy mirrors Linux: bundle everything EXCEPT the OS's own
-# libraries. On macOS that means anything under /usr/lib or
-# /System/Library — those are guaranteed present, are version-matched to the
-# host, and are not redistributable. Homebrew's /opt/homebrew (arm64) and
-# /usr/local (x86_64) trees are exactly what must travel.
+# Bundling policy mirrors Linux: ship everything EXCEPT the OS's own
+# libraries, which on macOS means anything under /usr/lib or
+# /System/Library — always present, version-matched to the host, and not
+# redistributable. Homebrew's trees (/opt/homebrew on arm64, /usr/local on
+# x86_64) are what must travel.
 set -euo pipefail
 
 : "${PREFIX:?PREFIX must be set (Gwyddion install prefix)}"
@@ -68,9 +69,9 @@ direct_deps() {
 }
 
 echo "== Resolving the transitive dependency closure =="
-# Worklist over every Mach-O we ship: the executable plus every dlopen'd
-# module. Modules matter for the same reason they did on Linux — their own
-# NEEDED libraries (libxml2 & co. for the anasys_xml/spml/zyvex parsers)
+# Worklist over every Mach-O shipped: the executable plus every dlopen()'d
+# module. The modules matter for the same reason as on Linux — their own
+# dependencies (libxml2 and co., for the anasys_xml/spml/zyvex parsers)
 # appear in no other file's dependency list.
 WORK="$(mktemp)"; SEEN="$(mktemp)"; trap 'rm -f "$WORK" "$SEEN"' EXIT
 {
@@ -136,8 +137,8 @@ while read -r macho; do
 
   # Re-sign: the edits above invalidate the existing signature, and macOS
   # refuses to load an invalidly-signed Mach-O (hard failure on arm64).
-  # Ad-hoc (`-`) is sufficient for a locally-built, non-distributed-via-App-
-  # Store binary.
+  # An ad-hoc signature (`-`) suffices for a binary distributed outside the
+  # App Store.
   codesign --force --sign - --timestamp=none "$macho" 2>/dev/null || true
 done
 
@@ -161,14 +162,13 @@ env -i "$BUNDLE_DIR/gwyconvert" --list-formats | python3 -c \
   "import json,sys; d=json.load(sys.stdin); assert len(d) > 100, d; print(f'bundle OK: {len(d)} formats')"
 
 echo "== Checking no bundled file still points outside the bundle =="
-# A reference to /opt/homebrew, /usr/local or the build PREFIX surviving here
-# means the rewrite missed something: it would work on this machine and fail
-# on every user's. Fail the build rather than ship it.
+# A surviving reference to /opt/homebrew, /usr/local or the build PREFIX
+# means the rewrite missed something — it would work here and fail on every
+# user's machine. Fail the build rather than ship it.
 #
-# The results are collected in a file rather than a shell variable on
-# purpose — the `while` below runs in a subshell (it is the right-hand side
-# of a pipe), so assigning to a variable inside it would be discarded and the
-# check would silently always pass.
+# Results go to a file, not a shell variable, deliberately: the `while`
+# below is the right-hand side of a pipe and so runs in a subshell, where an
+# assignment would be discarded and the check would always pass.
 LEAKS="$(mktemp)"
 find "$LIB_DIR" -type f \( -name '*.dylib' -o -name '*.so' -o -name 'gwyconvert.real' \) |
 while read -r macho; do

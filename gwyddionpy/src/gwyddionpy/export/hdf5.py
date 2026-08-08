@@ -2,10 +2,10 @@
 
 Layout: one group per channel under /channels, image as a compressed
 dataset ``data``, physical dimensions/units as group attributes, vendor
-metadata under the ``meta`` subgroup. The grouping/value-unit-splitting
-rules for ``meta`` live in ``gwyddionpy._metatree`` (shared with the dict
-export, so both stay structurally identical). NeXus output is not done
-here — that goes through pynxtools-spm (docs/EXTENDING.md).
+metadata under the ``meta`` subgroup. The grouping and value/unit-splitting
+rules live in ``gwyddionpy._metatree``, shared with the dict export so the
+two stay structurally identical — change one and check the other. This is
+plain HDF5, not NeXus; NeXus output is pynxtools-spm's job.
 
 With ``hierarchical_meta=True`` (default) vendor metadata keys are
 unfolded into nested HDF5 groups and each entry is stored as a scalar

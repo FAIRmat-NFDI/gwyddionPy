@@ -7,13 +7,12 @@ on:
   #   branches: [main]
 
 jobs:
-  # Two independent, parallel jobs (no `needs:` between them) exercising
-  # the two ways to get a working gwyconvert documented in docs/BUILD.md.
-  # Deliberately kept side by side rather than one replacing the other:
-  # pytest-source-tarball tests the same recipe the release binary uses
-  # (gwyddionpy-converter/ci/build-gwyddion.sh); pytest-system-package tests that the
-  # System package build path BUILD.md documents for local dev still
-  # actually works, since real contributors may still reach for it.
+  # Two independent jobs (no `needs:` between them) covering the two ways a
+  # developer can obtain gwyconvert. Both are kept: pytest-source-tarball
+  # exercises the recipe released artifacts are built from
+  # (gwyddionpy-converter/ci/build-gwyddion.sh), while pytest-system-package
+  # exercises the distro-package route contributors actually reach for
+  # locally, which nothing else would catch if it broke.
 
   pytest-system-package:
     name: pytest (system Gwyddion package)
@@ -26,13 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # System package build (docs/BUILD.md). `gwyddion` itself — not
-      # just libgwyddion20-dev — is required: the actual file-format
-      # module plugins (~150-170 .so files gwyconvert loads at runtime
-      # via gwy_find_self_dir()) are packaged under the `gwyddion` binary
-      # package, not the -dev headers package (confirmed via `dpkg -S`;
-      # see V1_IMPLEMENTATION.md, 2026-07-22). Without it, gwyconvert
-      # builds and runs fine but silently registers zero formats.
+      # `gwyddion` itself is required, not just libgwyddion20-dev: Debian
+      # and Ubuntu ship the file-format module plugins (~170 .so files that
+      # gwyconvert dlopen()s at runtime) in the `gwyddion` binary package,
+      # while the -dev package carries only headers and link libraries.
+      # Omit it and gwyconvert builds, links and runs — reporting zero
+      # formats. Keep this list in sync with docs/user/how-to.md.
       - name: Install Gwyddion (system package)
         run: |
           sudo apt-get update
@@ -68,18 +66,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Builds Gwyddion itself from its official source tarball
-      # (gwyddionpy-converter/ci/build-gwyddion.sh — shared with build-converter.yml)
-      # instead of the system package (docs/BUILD.md's "System package
-      # build"). Deliberate: that apt-based path depends on Ubuntu's own
-      # package split, which already bit this project once — the actual
-      # file-format module plugins turned out to live in the `gwyddion`
-      # package, not `libgwyddion20-dev`, invisible on a dev machine that
-      # happened to have `gwyddion` installed already, real on a fresh CI
-      # runner (see V1_IMPLEMENTATION.md, 2026-07-22). Building from
-      # source ourselves — the same recipe the release binary uses —
-      # removes that whole class of risk, and tests closer to what
-      # actually ships.
+      # Build dependencies only — Gwyddion itself is built from its official
+      # source tarball by ci/build-gwyddion.sh, the same script
+      # build-converter.yml uses. Testing against that rather than the
+      # distro package means this job matches what actually ships, and does
+      # not depend on how a distribution happens to split its Gwyddion
+      # packages (the exact assumption the job above documents).
       - name: Install build dependencies for Gwyddion
         run: |
           sudo apt-get update

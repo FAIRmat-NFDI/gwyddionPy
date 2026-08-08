@@ -1,14 +1,11 @@
 name: Publish wheels to TestPyPI
 
-# Both wheels (gwyddionpy and gwyddionpy-converter) are published from
-# this single workflow so they can share one build-converter run: the
-# Rocky Linux 8 build of gwyconvert happens once per release, and every
-# job below descends from it. That also keeps
-# github.event.release.tag_name directly available to every job, since
-# they're all part of the same release-triggered run.
+# Publishes both packages — gwyddionpy (Apache-2.0, pure Python) and
+# gwyddionpy-converter (GPL-2.0-or-later, prebuilt binaries) — from one
+# workflow, so they share a single converter build and one release tag.
 #
-# Job graph (the chain, not a fan-out — see publish-python-wheel for why
-# the converter must reach the index first):
+# The graph is a chain, not a fan-out: the converter must reach the index
+# before gwyddionpy does (see publish-python-wheel).
 #
 #   build-converter ─┬─> build-python-wheel ──────────┐
 #                    └─> publish-converter-wheel ─────┴─> publish-python-wheel
@@ -26,10 +23,10 @@ jobs:
 
   build-python-wheel:
     name: Build gwyddionpy package
-    # `needs: build-converter` is not just ordering — with the lockstep pin
-    # below, a released gwyddionpy hard-requires the converter built from
-    # this same tag. Publishing it while that build is broken would ship a
-    # package whose `[converter]` extra can never resolve.
+    # More than ordering: the lockstep pin below makes a released
+    # gwyddionpy hard-require the converter from this same tag, so building
+    # it while the converter build is broken would ship a package whose
+    # `[converter]` extra can never resolve.
     needs: build-converter
     runs-on: ubuntu-latest
     env:
@@ -37,17 +34,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history + tags: setuptools-scm derives the version from
-          # git tags, a shallow checkout would produce a bogus version.
-          # fetch-depth: 0 alone is NOT enough — actions/checkout does not
-          # fetch tags just because history is unshallowed; fetch-tags must
-          # be requested explicitly, or git describe can't find v0.0.14 even
-          # while sitting exactly on that commit, and setuptools-scm falls
-          # back to a distance-based dev version like
-          # 0.0.14.post1.dev0+gd433fa913.d20260731 — which PyPI/TestPyPI then
-          # reject outright (400: local versions are not allowed). Confirmed
-          # 2026-07-31: run 30616740273 hit exactly this, with the git hash
-          # in the rejected version matching v0.0.14's commit exactly.
+          # setuptools-scm derives the version from git tags, so both flags
+          # are required. fetch-depth alone is not enough: actions/checkout
+          # unshallows history but does not fetch tags unless asked. Without
+          # the tags `git describe` produces a dev version carrying a local
+          # segment (0.0.14.post1.dev0+g...), which PyPI rejects outright
+          # ("local versions are not allowed").
+          # https://peps.python.org/pep-0440/#local-version-identifiers
           fetch-depth: 0
           fetch-tags: true
 
@@ -56,17 +49,21 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Lockstep versioning. Both packages are versioned from this same git
-      # tag (setuptools-scm; the converter sets root="..") and are published
-      # by this same workflow run, so a released gwyddionpy must require
-      # exactly the converter from that tag. This can't be written into
-      # pyproject.toml because the version is dynamic — and it is applied
-      # here, at release time, rather than committed, so that local/editable
-      # installs keep resolving the unpinned requirement (a dev version like
-      # 0.0.8.post1.dev0+g4bb1ae4.d20260729 corresponds to no published
-      # converter, so an `==` pin on it could never be satisfied).
-      # Release tags are "v"-prefixed while versions are not (v0.0.8 ->
-      # 0.0.8) — see _fetch_converter._release_tag() for the same conversion.
+      # Lockstep versioning: both packages take their version from this git
+      # tag and are published by this run, so the released gwyddionpy must
+      # require exactly the converter from the same tag.
+      #
+      # Applied here rather than committed to pyproject.toml, for two
+      # reasons: the version is dynamic, so it cannot be written literally;
+      # and a checkout/editable install must keep resolving the UNPINNED
+      # requirement, since its dev version corresponds to no published
+      # converter and an `==` pin on it could never be satisfied.
+      #
+      # The regex below must keep matching gwyddionpy/pyproject.toml's
+      # `converter = ["gwyddionpy-converter"]` line — reword that line and
+      # this step fails loudly (by design, see the `count != 1` check).
+      # Tags are "v"-prefixed, versions are not; _fetch_converter._release_tag()
+      # performs the same conversion in the other direction.
       - name: Pin gwyddionpy-converter to this exact release
         run: |
           VERSION="${TAG#v}"
@@ -96,25 +93,20 @@ jobs:
           print(f"pinned gwyddionpy-converter=={version}")
           PY
 
-      # SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY, not plain git-describe:
-      # the previous step just rewrote gwyddionpy/pyproject.toml in place to
-      # apply the lockstep pin, which leaves the working tree dirty. setuptools-
-      # scm treats a dirty tree as "not a clean release" regardless of commit
-      # distance — even sitting exactly on the release tag it then renders a
-      # version like 0.0.16.post1.dev0+g6368617.d20260731, which TestPyPI
-      # rejects outright (400: local versions are not allowed). Confirmed
-      # 2026-07-31 (run 30626759566): `git describe --tags --long` on that
-      # exact commit gave a clean v0.0.16-0-g6368617, proving distance/tag
-      # visibility was never the issue — the in-place edit was. Pretending the
-      # version sidesteps git state entirely, the same way the converter's
-      # build already does via SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER.
+      # The pin above rewrites pyproject.toml in place, which leaves the
+      # working tree dirty — and setuptools-scm treats a dirty tree as "not
+      # a clean release" even when sitting exactly on the tag, producing a
+      # version with a local segment that PyPI rejects. Pretending the
+      # version sidesteps git state entirely, as the converter build already
+      # does with SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER.
+      # https://setuptools-scm.readthedocs.io/en/latest/overrides/
       - name: Build package
         env:
           SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY: ${{ env.VERSION }}
         run: uv build ./gwyddionpy --out-dir dist
 
-      # The sed-style edit above only proves the file changed; this proves
-      # the pin actually reached the metadata pip will read.
+      # The edit above only proves the file changed; this proves the pin
+      # reached the metadata pip actually reads.
       - name: Verify the lockstep pin reached the built metadata
         run: |
           VERSION="${TAG#v}"
@@ -144,27 +136,25 @@ jobs:
   publish-python-wheel:
     # TODO: Use PyPI in production
     name: Upload gwyddionpy to TestPyPI
-    # Ordering is deliberate and load-bearing: gwyddionpy is published
-    # *after* the converter, never in parallel with it. The lockstep pin
-    # added in build-python-wheel makes a released gwyddionpy hard-require
-    # `gwyddionpy-converter==<this tag>`, so if the converter upload fails
-    # while gwyddionpy's succeeds, the published `[converter]` extra can
-    # never resolve — and PyPI forbids re-uploading a version, so the only
-    # fix would be cutting a whole new release. Depending on
-    # publish-converter-wheel means that failure skips this job instead.
+    # Ordering is load-bearing: gwyddionpy publishes AFTER the converter,
+    # never in parallel. Its lockstep pin hard-requires
+    # `gwyddionpy-converter==<this tag>`, so a converter upload that fails
+    # while this one succeeds would leave a published `[converter]` extra
+    # that can never resolve — unfixable, since PyPI forbids re-uploading a
+    # version. Depending on publish-converter-wheel skips this job instead.
     #
-    # The reverse ordering failure is harmless by comparison: a converter
-    # published with no gwyddionpy referencing it yet just sits there
-    # unused. Recovery from a partial failure is a plain re-run of this
-    # workflow — both publish steps set `skip-existing: true`, so whichever
-    # package already landed is skipped and only the failed one retries.
+    # The reverse failure is harmless: a converter nothing references yet
+    # just sits unused. Recovery is a plain re-run — both publish steps set
+    # `skip-existing: true`, so only the failed upload retries.
     needs: [build-python-wheel, publish-converter-wheel]
     runs-on: ubuntu-latest
     environment:
       name: testpypi
       url: https://test.pypi.org/p/gwyddionpy
     permissions:
-      id-token: write  # required for PyPI Trusted Publishing (OIDC)
+      # PyPI Trusted Publishing (OIDC) — no API token stored anywhere.
+      # https://docs.pypi.org/trusted-publishers/
+      id-token: write
     steps:
       - name: Download dist artifacts
         uses: actions/download-artifact@v4
@@ -179,13 +169,9 @@ jobs:
           skip-existing: true
 
   publish-converter-wheel:
-    # The wheels themselves are built by build-converter.yml's `wheels`
-    # matrix (setup.py + cibuildwheel on manylinux_2_28 / macos-15 /
-    # macos-15-intel / windows-latest — V1d) and arrive here as artifacts of
-    # the same run; this job only collects and uploads them. The previous
-    # incarnation rebuilt a single Linux wheel from the release tarball —
-    # that tarball still exists, but only as the fetch-helper's release
-    # asset, no longer as the wheel's source.
+    # Collect-and-upload only. The wheels are built by build-converter.yml's
+    # `wheels` matrix (manylinux_2_28, macos-15 arm64, macos-15-intel,
+    # windows-latest) and arrive here as artifacts of the same run.
     name: Publish gwyddionpy-converter wheels
     needs: build-converter
     runs-on: ubuntu-latest
@@ -193,7 +179,9 @@ jobs:
       name: testpypi-converter
       url: https://test.pypi.org/p/gwyddionpy-converter
     permissions:
-      id-token: write  # required for PyPI Trusted Publishing (OIDC)
+      # PyPI Trusted Publishing (OIDC) — no API token stored anywhere.
+      # https://docs.pypi.org/trusted-publishers/
+      id-token: write
     steps:
       - name: Collect the wheel artifacts
         uses: actions/download-artifact@v4
@@ -202,10 +190,10 @@ jobs:
           path: dist/
           merge-multiple: true
 
-      # Wheel-only stays the rule (no sdist): an sdist would let pip fall
-      # back to building Gwyddion from source on any user machine without a
-      # matching wheel. Guard against an empty dist/ too — publishing
-      # nothing "successfully" would break the lockstep pin silently.
+      # Wheels only, never an sdist: an sdist would let pip fall back to
+      # building Gwyddion from source on any machine without a matching
+      # wheel. The count check catches the other failure — publishing an
+      # empty dist/ "successfully" would silently break the lockstep pin.
       - name: Fail rather than publish an empty release
         run: |
           ls -l dist/

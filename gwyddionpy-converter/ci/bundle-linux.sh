@@ -1,34 +1,28 @@
 #!/usr/bin/env bash
-# Turn a freshly-built gwyconvert + its Gwyddion install prefix into a
-# self-contained, relocatable bundle directory.
+# Turn a freshly-built gwyconvert plus its Gwyddion install prefix into a
+# self-contained, relocatable bundle directory. (macOS and Windows have
+# their own counterparts: bundle-macos.sh, bundle-windows.sh.)
 #
-# Extracted from build-linux.sh (2026-07-29, V1d-2) so there is exactly one
-# bundling recipe with two callers, the same way build-gwyddion.sh is one
-# build recipe with two callers:
-#   - build-linux.sh          -> bundles into a temp dir, then tars it up as
-#                                the GitHub Release asset _fetch_converter.py
-#                                downloads.
-#   - cibw-before-all-linux.sh -> bundles straight into the wheel's package
-#                                data directory.
-# Splitting these apart matters because the bundling logic is where four of
-# this project's bugs have lived (V1_IMPLEMENTATION.md: the missing modules
-# dir, the dlopen'd modules' own deps, the missing RPATH, the glibc floor).
-# Two copies of it would eventually disagree.
+# One recipe, two callers — keep it that way, two copies would drift:
+#   - build-linux.sh           -> bundle to a temp dir, tar it as the
+#                                 GitHub Release asset.
+#   - cibw-before-all-linux.sh -> bundle straight into the wheel's package
+#                                 data.
 #
 # Inputs (all required, via environment):
 #   PREFIX            Gwyddion install prefix from build-gwyddion.sh
-#   BUILT_GWYCONVERT  path to the gwyconvert ELF just built against it
-#   BUNDLE_DIR        destination; created if absent, must end up holding
-#                     `gwyconvert` (wrapper) + `lib/`
+#   BUILT_GWYCONVERT  the gwyconvert ELF just built against it
+#   BUNDLE_DIR        destination; ends up holding `gwyconvert` (wrapper)
+#                     + `lib/`. gwyddionpy_converter.binary_path() looks
+#                     for that wrapper name.
 #
-# Bundling policy: bundle everything gwyconvert links against at runtime
-# EXCEPT glibc itself (libc/libm/libpthread/libdl/librt/the dynamic linker)
-# — glibc must never travel in a redistributable bundle, it's tied to the
-# host by design (that's the entire reason manylinux pins a baseline
-# instead of bundling it). Deliberately erring toward bundling *more* of
-# everything else (the X11 client library family included) rather than
-# less: the point of a "headless converter" is to also work inside minimal
-# server/container images that won't have any of this preinstalled.
+# Bundling policy: ship everything gwyconvert loads at run time EXCEPT
+# glibc (libc/libm/libpthread/libdl/librt and the dynamic linker). glibc is
+# tied to the host by design and must never travel in a redistributable
+# bundle — pinning a baseline instead of bundling it is the whole point of
+# manylinux. Everything else errs toward bundling MORE (the X11 client
+# libraries included), because a headless converter should also work inside
+# minimal server and container images.
 set -euo pipefail
 
 : "${PREFIX:?PREFIX must be set (Gwyddion install prefix)}"
@@ -44,30 +38,27 @@ rm -rf "$BUNDLE_DIR"
 mkdir -p "$BUNDLE_DIR/lib"
 cp "$BUILT_GWYCONVERT" "$BUNDLE_DIR/lib/gwyconvert.real"
 
-# gwyconvert.c finds its format-parser plugins via gwy_find_self_dir(),
-# which on Unix uses a path *compiled into libgwyddion at Gwyddion's own
-# build time* (or the GWYDDION_LIBDIR env var, which overrides it — see
-# gwy_find_self_dir() in libgwyddion/gwyutils.c). That compiled-in path is
-# $PREFIX/lib, i.e. a temporary build directory — which won't exist on
-# whoever installs this. Confirmed by hand (V1_IMPLEMENTATION.md):
-# without bundling this directory and pointing GWYDDION_LIBDIR at it,
-# gwyconvert runs fine (exit 0) and silently reports zero formats — the
-# "broken build could still exit 0" case test_run.py's
-# test_list_formats_reports_known_formats exists to catch.
+# gwyconvert.c locates its format-parser plugins through
+# gwy_find_self_dir(), which on Unix returns a path compiled into
+# libgwyddion at Gwyddion's build time — here $PREFIX/lib, a temporary
+# directory that will not exist on a user's machine — unless the
+# GWYDDION_LIBDIR environment variable overrides it (see
+# libgwyddion/gwyutils.c upstream). So the plugins must be copied out, and
+# the wrapper below must point GWYDDION_LIBDIR at the copy. Skip either and
+# gwyconvert exits 0 while reporting zero formats.
 cp -r "$PREFIX/lib/gwyddion" "$BUNDLE_DIR/lib/gwyddion"
 
 # glibc's own pieces: never bundle these (see policy note above).
 EXCLUDE_RE='^(linux-vdso\.so|ld-linux|libc\.so|libm\.so|libpthread\.so|libdl\.so|librt\.so|libresolv\.so|libnsl\.so|libutil\.so)'
 
-# ldd the executable AND every dlopen()-loaded module: the modules have
-# their own NEEDED libraries that never appear in the executable's ldd
-# output (e.g. libxml2 for the anasys_xml/spml/zyvex parsers). Confirmed
-# by hand (2026-07-22): without this, those formats silently vanish from
-# --list-formats on any target lacking the library — the builder itself
-# masked the gap because its dnf/apt-installed system libs filled in.
-# LD_LIBRARY_PATH makes the modules' deps on the fresh Gwyddion build
-# resolvable during ldd (the executable got an explicit RPATH; the
-# libtool-built modules' install RPATH is not guaranteed).
+# ldd the executable AND every dlopen()'d module. The modules have their
+# own NEEDED libraries that appear in no other file's ldd output (libxml2,
+# for the anasys_xml/spml/zyvex parsers). Miss them and those formats
+# vanish from --list-formats on any machine lacking the library — invisible
+# on the build machine, whose system packages fill the gap.
+# LD_LIBRARY_PATH lets ldd resolve the modules' deps against the fresh
+# build: the executable has an explicit RPATH, the libtool-built modules
+# do not necessarily.
 {
   ldd "$BUILT_GWYCONVERT"
   find "$PREFIX/lib/gwyddion/modules" -name '*.so' \
@@ -85,15 +76,14 @@ done
 
 cat > "$BUNDLE_DIR/gwyconvert" <<'WRAPPER'
 #!/bin/sh
-# Sets GWYDDION_LIBDIR so gwyconvert.real finds the bundled modules in
-# lib/gwyddion/modules/file/ instead of the (nonexistent, post-extraction)
-# path compiled in at CI build time. See bundle-linux.sh for the full story.
+# Points GWYDDION_LIBDIR at the bundled modules, replacing the build-time
+# path compiled into libgwyddion. See bundle-linux.sh for the full story.
 here="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 export GWYDDION_LIBDIR="$here/lib"
-# Required for the dlopen()-loaded modules' OWN dependencies (libxml2 &
-# co.): an executable's RUNPATH does not apply to libraries needed by a
-# dlopen()'d object, so without this only deps that happen to be already
-# loaded into the process (the core Gwyddion/GTK libs) would resolve.
+# Needed for the dlopen()'d modules' OWN dependencies (libxml2 and co.):
+# an executable's RUNPATH does not apply to libraries required by a
+# dlopen()'d object, so without this only libraries already loaded into the
+# process (the core Gwyddion/GTK ones) would resolve.
 export LD_LIBRARY_PATH="$here/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec "$here/lib/gwyconvert.real" "$@"
 WRAPPER

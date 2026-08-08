@@ -1,8 +1,9 @@
-"""End-to-end tests against real vendor files in gwyddionpy/test-data/.
+"""End-to-end tests against real vendor files in the repo's test-data/.
 
-Need a built gwyconvert (GWYDDIONPY_CONVERT or PATH) and the sample files
-(see test-data/README.md for provenance and re-fetch commands). Both are
-skipped cleanly when absent, so the offline unit suite stays green.
+Need gwyconvert (see gwyddionpy._run.find_converter for how it is located)
+and the sample files, whose provenance and re-fetch commands are listed in
+test-data/README.md. Both are skipped cleanly when absent, so the offline
+unit suite stays green without them.
 """
 from pathlib import Path
 
@@ -54,8 +55,9 @@ def test_real_file_parses(name, module, nchannels):
 
 
 def test_spectroscopy_file_loads_with_zero_channels():
-    # Nanonis .dat holds graph/spectra objects; the gwyddionpy model only
-    # extracts image channels so far (TODO.md: spectra/volume support).
+    # Nanonis .dat holds graph/spectra objects. The gwyddionpy model covers
+    # image channels only, so the file loads and yields none — asserted here
+    # so that adding spectra support shows up as a deliberate test change.
     path = TEST_DATA / "Bias-Spectroscopy002.dat"
     if not path.is_file():
         pytest.skip(f"sample file missing: {path}")

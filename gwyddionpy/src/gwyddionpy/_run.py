@@ -1,4 +1,8 @@
-"""Locating and running the gwyconvert helper binary."""
+"""Locating and running the gwyconvert helper binary.
+
+gwyconvert is a separate GPL-2.0-or-later executable; this module only ever
+launches it as a subprocess, which is what keeps gwyddionpy Apache-2.0.
+"""
 from __future__ import annotations
 
 import json
@@ -15,10 +19,18 @@ BINARY_NAME = "gwyconvert"
 
 
 def find_converter(explicit: Optional[str] = None) -> str:
-    """Resolve the gwyconvert binary: explicit argument, then the
-    GWYDDIONPY_CONVERT environment variable, then PATH, then the bundled
-    ``gwyddionpy-converter`` package (if installed), then a converter
-    previously fetched via ``gwyddionpy.ensure_converter()``."""
+    """Resolve the gwyconvert binary, in this order:
+
+    1. the ``explicit`` argument,
+    2. the ``GWYDDIONPY_CONVERT`` environment variable,
+    3. ``gwyconvert`` on ``PATH``,
+    4. the ``gwyddionpy-converter`` wheel, if installed,
+    5. a binary previously downloaded by ``gwyddionpy.ensure_converter()``.
+
+    The two explicit overrides (1 and 2) raise when set but pointing at no
+    file, rather than falling through — a wrong override is a mistake worth
+    reporting, not something to silently paper over with another candidate.
+    """
     if explicit is not None:
         if Path(explicit).is_file():
             return str(explicit)
@@ -50,18 +62,20 @@ def find_converter(explicit: Optional[str] = None) -> str:
         return str(cached)
 
     raise ConverterNotFoundError(
-        f"cannot find {BINARY_NAME!r}: set {ENV_VAR}, add it to PATH, run "
-        "`gwyddionpy-fetch-converter` to download a prebuilt one, or see "
-        "build instructions in gwyddionpy/docs/BUILD.md"
+        f"cannot find {BINARY_NAME!r}: install it with "
+        f"`pip install 'gwyddionpy[converter]'`, set {ENV_VAR}, add it to "
+        "PATH, or run `gwyddionpy-fetch-converter` to download a prebuilt "
+        "binary. See docs/user/how-to.md for the full instructions."
     )
 
 
 def run_converter(
     input_path: Path, output_path: Path, converter: Optional[str] = None
 ) -> Optional[str]:
-    """Convert input_path to a .gwy file at output_path.
+    """Convert ``input_path`` to a .gwy file at ``output_path``.
 
-    Returns the name of the Gwyddion module that parsed the file.
+    Returns the name of the Gwyddion file module that parsed the input, or
+    None if the converter did not report one.
     """
     binary = find_converter(converter)
     proc = subprocess.run(
