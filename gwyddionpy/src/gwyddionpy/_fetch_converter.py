@@ -1,5 +1,11 @@
 """Download a prebuilt gwyconvert binary from a GitHub Release.
 
+**Deprecated, and kept only for the transition.** Installing the wheel —
+``pip install "gwyddionpy[converter]"`` — is the supported way to get a
+converter, and this module is scheduled for removal in a future release.
+It still works, and is still tested, so that anyone relying on it is not
+stranded mid-version; nothing new should be built on it.
+
 An alternative to ``pip install "gwyddionpy[converter]"`` for anyone who
 wants the binary without adding a GPL package to their environment. The
 tarball is built by .github/workflows/build-converter.yml's `linux` job and
@@ -28,6 +34,7 @@ import tarfile
 import tempfile
 import urllib.error
 import urllib.request
+import warnings
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Optional
@@ -35,6 +42,15 @@ from typing import Optional
 from platformdirs import user_cache_dir
 
 from ._errors import ConverterFetchError
+
+#: Shown once per call rather than at import, so merely having gwyddionpy
+#: installed does not nag anyone who never touches this path.
+_DEPRECATION = (
+    "gwyddionpy.ensure_converter() and the gwyddionpy-fetch-converter "
+    "command are deprecated and will be removed in a future release. "
+    "Install the converter as a wheel instead: "
+    'pip install "gwyddionpy[converter]".'
+)
 
 GITHUB_REPO = "FAIRmat-NFDI/gwyddionPy"
 # Override for testing (tests/test_fetch_converter.py points it at a local
@@ -158,7 +174,13 @@ def ensure_converter(*, force: bool = False) -> Path:
     Returns an already-cached binary immediately unless ``force=True``.
     Call this explicitly (or run ``gwyddionpy-fetch-converter``): it never
     runs on import or as a side effect of ``pip install``.
+
+    .. deprecated::
+        Install ``gwyddionpy[converter]`` instead. This will be removed in
+        a future release.
     """
+    warnings.warn(_DEPRECATION, DeprecationWarning, stacklevel=2)
+
     cached = cached_converter_path()
     if cached is not None and not force:
         return cached
@@ -200,12 +222,18 @@ def _main(argv: Optional[list] = None) -> None:
     parser = argparse.ArgumentParser(
         prog="gwyddionpy-fetch-converter",
         description="Download the prebuilt gwyconvert binary for this platform "
-        "(GPL-2.0-or-later, fetched separately from the gwyddionpy package).",
+        "(GPL-2.0-or-later, fetched separately from the gwyddionpy package). "
+        "Deprecated: install gwyddionpy[converter] instead; this command will "
+        "be removed in a future release.",
     )
     parser.add_argument(
         "--force", action="store_true", help="re-download even if already cached"
     )
     args = parser.parse_args(argv)
+
+    # DeprecationWarning is silent by default in a console script, so the
+    # notice is printed where the person running it will actually see it.
+    print(f"warning: {_DEPRECATION}", file=sys.stderr)
 
     try:
         path = ensure_converter(force=args.force)

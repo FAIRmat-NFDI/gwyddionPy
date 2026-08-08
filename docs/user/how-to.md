@@ -41,7 +41,13 @@ The extra is opt-in on purpose: a plain `pip install gwyddionpy` stays
 entirely Apache-2.0, so requesting the GPL binary is always your explicit
 choice.
 
-## Option 2 — a prebuilt binary from a GitHub Release
+## Option 2 — a prebuilt binary from a GitHub Release (deprecated)
+
+> **Deprecated.** This route still works and is still tested, but it will be
+> removed in a future release. Option 1 is the supported way to get a
+> converter. If you are choosing now, choose option 1; if you already rely on
+> this, you have until the removal to move across, and the command prints a
+> notice saying so.
 
 Useful when you want the binary without a GPL package in your environment.
 
