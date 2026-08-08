@@ -53,6 +53,10 @@ jobs:
       - name: Test with pytest
         env:
           GWYDDIONPY_CONVERT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
+          # Declares which platform this leg is. A job that ends up on the
+          # wrong image stops with an error instead of reporting a green run
+          # for a platform it never tested.
+          GWYDDIONPY_REQUIRE_PLATFORM: linux
         run: pytest gwyddionpy/tests
 
   pytest-source-tarball:
@@ -96,4 +100,63 @@ jobs:
       - name: Test with pytest
         env:
           GWYDDIONPY_CONVERT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
+          # Declares which platform this leg is. A job that ends up on the
+          # wrong image stops with an error instead of reporting a green run
+          # for a platform it never tested.
+          GWYDDIONPY_REQUIRE_PLATFORM: linux
         run: pytest gwyddionpy/tests
+
+  # ---------------------------------------------------------------------
+  # The wheel as users actually install it, on every platform it is built
+  # for. These legs install gwyddionpy-converter from the index rather than
+  # building a converter locally, so they exercise the only supported route
+  # to a binary — and they are the only place the packaging tests run.
+  #
+  # A comma-decimal locale is generated on Linux because the locale tests
+  # prove independence from it, and cannot do so if none is installed.
+  # ---------------------------------------------------------------------
+  pytest-installed-wheel:
+    name: pytest (installed wheel, ${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-15
+            platform: macos
+          - os: macos-15-intel
+            platform: macos
+          - os: windows-latest
+            platform: windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate a comma-decimal locale (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y locales
+          sudo locale-gen de_DE.UTF-8
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install gwyddionpy and the converter wheel
+        shell: bash
+        run: |
+          uv pip install --system \
+            --index-url https://pypi.org/simple/ \
+            --extra-index-url https://test.pypi.org/simple/ \
+            gwyddionpy-converter
+          uv pip install --system "./gwyddionpy[test]"
+
+      - name: Test with pytest
+        shell: bash
+        env:
+          GWYDDIONPY_REQUIRE_PLATFORM: ${{ matrix.platform }}
+        run: pytest gwyddionpy/tests gwyddionpy-converter/tests

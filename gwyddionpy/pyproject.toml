@@ -116,4 +116,5 @@ pythonpath = ["tests"]
 markers = [
     "corpus: tests needing full-size raw files fetched from the corpus host",
     "formats: tests reading the real vendor files under tests/data/",
+    "platform: cross-platform tests; run only when --require-platform (or GWYDDIONPY_REQUIRE_PLATFORM) names the platform",
 ]

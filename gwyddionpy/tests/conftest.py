@@ -13,7 +13,81 @@ gwyddionpy-converter package installed alongside gwyddionpy.
 import numpy as np
 import pytest
 
+from helpers import platforms
 from helpers.gwy_builder import make_gwy
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--require-platform", action="store", default="", metavar="NAME",
+        help=("declare which platform this run is meant to be (linux, macos, "
+              "windows). Running anywhere else then stops the run instead of "
+              "quietly passing. Also settable as "
+              f"{platforms.REQUIRE_ENV_VAR}."),
+    )
+
+
+def declared_platform(config):
+    """The platform this run says it is, or None if it did not say."""
+    declared = config.getoption("--require-platform") or ""
+    try:
+        return (platforms.normalize(declared) if declared
+                else platforms.required())
+    except ValueError as error:
+        raise pytest.UsageError(str(error)) from error
+
+
+def pytest_collection_modifyitems(config, items):
+    """Leave the cross-platform tests out unless a platform was declared.
+
+    They assert things that only mean something when the platform is known
+    and controlled — which binary shape is installed, how a path is spelled,
+    which system calls exist. In CI each leg declares itself and they run. On
+    a developer's machine there is nothing to check that the rest of the suite
+    does not already cover, so they stay out of the way.
+    """
+    if declared_platform(config) is not None:
+        return
+    skip = pytest.mark.skip(
+        reason=("cross-platform test: pass --require-platform (or set "
+                f"{platforms.REQUIRE_ENV_VAR}) to run it")
+    )
+    for item in items:
+        if item.get_closest_marker("platform") is not None:
+            item.add_marker(skip)
+
+
+def pytest_configure(config):
+    """Stop immediately if this run is not the platform it claims to be.
+
+    A cross-platform matrix is only worth having if each leg really is the
+    platform it says. An image that changed, a job that fell back to the
+    default runner, a `runs-on` typo — all of them produce a green run that
+    tested the wrong thing, and none of them is visible in the output. The
+    declaration is checked once, here, so the failure is unmissable.
+    """
+    expected = declared_platform(config)
+    if expected is None:
+        return
+
+    actual = platforms.current()
+    if actual != expected:
+        raise pytest.UsageError(
+            f"this run was told it is the {expected} leg but it is running on "
+            f"{platforms.describe()}. Either the declaration is wrong or the "
+            f"job is running on the wrong image; nothing here would have "
+            f"tested {expected}."
+        )
+
+
+@pytest.fixture(scope="session")
+def required_platform(pytestconfig):
+    """The platform this run declared, however it was declared.
+
+    Both the command-line option and the environment variable end up here, so
+    a test never has to know which was used.
+    """
+    return declared_platform(pytestconfig)
 
 
 @pytest.fixture
