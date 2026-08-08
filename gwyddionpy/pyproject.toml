@@ -25,7 +25,6 @@ dependencies = [
     "numpy>=1.22",
     "gwyfile>=0.3",
     "platformdirs>=3.0",
-    "gwyddionpy-converter"
 ]
 
 [project.urls]
@@ -36,6 +35,21 @@ dependencies = [
 gwyddionpy-fetch-converter = "gwyddionpy._fetch_converter:_main"
 
 [project.optional-dependencies]
+# The GPL-2.0-or-later converter wheel is an *extra*, never a hard
+# dependency, for two reasons:
+#   1. License firewall. A plain `pip install gwyddionpy` must stay 100%
+#      Apache-2.0 for consumers who cannot take GPL artifacts; requesting
+#      `gwyddionpy[converter]` makes pulling one an explicit choice.
+#   2. Coverage. The converter ships wheels for Linux x86_64, macOS
+#      arm64/x86_64 and Windows x86_64, and no sdist — so as a hard
+#      dependency it would break `pip install gwyddionpy` outright on any
+#      other platform (Linux ARM, musl). As an extra, those users still get
+#      gwyddionpy and can supply gwyconvert through _run.py's other
+#      discovery paths: GWYDDIONPY_CONVERT, PATH, or a self-built binary.
+#
+# publish.yml rewrites the line below at release time to pin the exact
+# converter version. Rewording it breaks that step (loudly, by design).
+converter = ["gwyddionpy-converter"]
 hdf5 = ["h5py>=3.0"]
 test = ["pytest>=7", "h5py>=3.0", "pooch>=1.6"]
 dev = [
@@ -49,9 +63,10 @@ dev = [
 where = ["src"]
 
 [tool.uv]
-# gwyddionpy-converter is only published to TestPyPI so far, while
-# numpy/gwyfile/platformdirs etc. only exist on real PyPI: index-url is
-# checked first, extra-index-url as fallback for everything else.
+# gwyddionpy and gwyddionpy-converter are published to TestPyPI so far,
+# while numpy/gwyfile/platformdirs live on real PyPI: index-url is searched
+# first and extra-index-url covers the rest. Drop both when this package
+# moves to production PyPI (gwyddionpy-converter/pyproject.toml too).
 index-url = "https://test.pypi.org/simple"
 extra-index-url = ["https://pypi.org/simple"]
 

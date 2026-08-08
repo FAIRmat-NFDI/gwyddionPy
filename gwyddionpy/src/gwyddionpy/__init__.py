@@ -1,7 +1,10 @@
 """gwyddionpy — read any Gwyddion-supported SPM raw file into NumPy.
 
 Pipeline: raw file -> gwyconvert subprocess -> .gwy -> gwyfile -> GwyData.
-Native .gwy inputs are parsed directly, no converter needed.
+Native .gwy inputs skip the converter and are parsed directly.
+
+The public surface is everything in ``__all__``; names prefixed with an
+underscore are internal and may change without notice.
 """
 from __future__ import annotations
 
@@ -44,8 +47,9 @@ __all__ = [
 def load(path, *, converter: Optional[str] = None) -> GwyData:
     """Load a raw SPM file of any Gwyddion-supported format.
 
-    ``converter`` optionally overrides gwyconvert discovery (otherwise the
-    GWYDDIONPY_CONVERT environment variable and PATH are searched).
+    ``converter`` is an explicit path to gwyconvert; when omitted, it is
+    discovered by ``_run.find_converter()``. A .gwy input is read directly
+    and needs no converter at all.
     """
     path = Path(path)
     if not path.is_file():

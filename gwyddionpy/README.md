@@ -1,10 +1,8 @@
 # gwyddionpy
 
-Read any Gwyddion-supported SPM raw file (~148 vendor formats) into Python:
-NumPy arrays + metadata dicts. Uses the `gwyconvert` helper binary (built
-from Gwyddion's libraries) via a subprocess — pure Python otherwise. Get
-`gwyconvert` via `gwyddionpy-fetch-converter` (downloads a prebuilt binary,
-Linux only for now) or by building it yourself (`../docs/BUILD.md`).
+Read any Gwyddion-supported SPM raw file (~170 vendor formats) into Python:
+NumPy arrays plus metadata dictionaries. Pure Python — the file parsing is
+done by the `gwyconvert` helper binary, which is run as a subprocess.
 
 ```python
 import gwyddionpy
@@ -15,4 +13,8 @@ data.metadata                     # vendor metadata
 data.to_hdf5("scan.h5")           # optional: pip install 'gwyddionpy[hdf5]'
 ```
 
-Full documentation: `../docs/` (USAGE.md, BUILD.md, TESTING.md).
+`gwyconvert` is installed separately, most simply with
+`pip install "gwyddionpy[converter]"`. See the
+[repository README](https://github.com/FAIRmat-NFDI/gwyddionPy) for the other
+options and for the licensing split (this package is Apache-2.0; the
+converter is GPL-2.0-or-later).

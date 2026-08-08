@@ -1,9 +1,10 @@
-"""Tests for the D6 converter fetch helper.
+"""Tests for the converter fetch helper.
 
-Uses a real local HTTP server (not a mock) serving a fake release tarball,
-so the actual download/checksum/extract code path in _fetch_converter.py
-runs end-to-end — just against localhost instead of github.com. No network
-access needed; nothing here touches the real ~/.cache/gwyddionpy.
+Uses a real local HTTP server (not a mock) serving a real tarball, so the
+download, checksum and extraction paths in _fetch_converter.py run
+end-to-end — against localhost instead of github.com, via the
+GWYDDIONPY_CONVERTER_BASE_URL override. No network access is needed, and
+nothing here touches the user's real cache directory.
 """
 import functools
 import hashlib

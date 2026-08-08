@@ -1,22 +1,18 @@
 name: Build and publish gwyconvert
 
-# Two ways in:
-# - workflow_call: publish.yml's `build-converter` job `uses:` this and
-#   both wheel-publish jobs `needs:` it, so the Rocky Linux 8 build below
-#   runs exactly once per release and both wheels are gated on it
-#   succeeding. No standalone `release:` trigger here: that would double
-#   the (slow) build and race its own `--clobber` upload against the
-#   called run.
-# - pull_request: runs the same build (minus the release upload) on every
-#   PR touching the converter, so a broken Rocky Linux 8 recipe fails CI
-#   instead of only surfacing at release time.
+# Builds the gwyconvert artifacts. Two entry points:
+# - workflow_call — publish.yml calls this once per release, so both
+#   publish jobs share a single (slow) build. There is deliberately no
+#   `release:` trigger here; that would run the build twice and race the
+#   two `--clobber` uploads against each other.
+# - pull_request — same build without the release upload, so a broken
+#   recipe fails CI rather than surfacing at release time.
 #
-# `tag` is passed explicitly as an input rather than read from
-# github.event.release.tag_name: the full github.event payload isn't
-# reliably forwarded into a called workflow (only github.sha/github.ref
-# are guaranteed to match the caller's), so the caller passes it down.
-# It's absent on pull_request runs, which is fine since those skip the
-# upload step (there's no release to attach to).
+# `tag` is an explicit input rather than github.event.release.tag_name:
+# a called workflow does not receive the caller's full event payload, so
+# the caller passes the tag down. It is empty on pull_request runs, which
+# is what the upload step gates on.
+# https://docs.github.com/actions/sharing-automations/reusing-workflows
 on:
   pull_request:
     branches: [main]
@@ -31,29 +27,105 @@ on:
         type: string
 
 jobs:
+  # Wheels: one py3-none wheel per platform, via setup.py + cibuildwheel.
+  # The separate `linux` job below produces the tarball that is attached to
+  # the GitHub Release and downloaded by gwyddionpy's _fetch_converter.py;
+  # the two paths are independent and both are still shipped.
+  wheels:
+    name: Build wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest    # -> py3-none-manylinux_2_28_x86_64
+          - os: macos-15         # arm64 runner -> py3-none-macosx_*_arm64
+          - os: macos-15-intel   # -> py3-none-macosx_*_x86_64
+          - os: windows-latest   # -> py3-none-win_amd64
+    steps:
+      - uses: actions/checkout@v4
+
+      # setuptools-scm cannot see .git from inside cibuildwheel's Linux
+      # container (root=".." resolves outside the copied project), so the
+      # version is always passed in explicitly. Release runs strip the "v"
+      # (v0.0.9 -> 0.0.9), matching publish.yml's lockstep pin; pull_request
+      # runs have no tag and build a throwaway 0.0.0 that is never published.
+      - name: Set the wheel version
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag }}"
+          VERSION="${TAG#v}"
+          [ -z "$VERSION" ] && VERSION="0.0.0"
+          echo "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER=$VERSION" >> "$GITHUB_ENV"
+
+      # Windows only: the Gwyddion build needs a real MSYS2 MinGW64 shell,
+      # which cibuildwheel's cmd-based hooks cannot provide. The bundle is
+      # therefore staged in its own step BEFORE cibuildwheel; setup.py's
+      # _check_bundle_present() turns any ordering mistake into a loud
+      # failure instead of an empty wheel. See ci/build-windows-bundle.sh.
+      #
+      # Changing this ordering, or the two steps' names, means revisiting
+      # gwyddionpy-converter/pyproject.toml [tool.cibuildwheel.windows],
+      # which documents the same split from the other side.
+      - name: Set up MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+
+      - name: Build and stage the Windows bundle
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: ./gwyddionpy-converter/ci/build-windows-bundle.sh
+
+      # macOS: this value reaches the wheel's platform tag through
+      # sysconfig.get_platform(). Pinned to the runner's own OS line, not
+      # lower: the bundle links Homebrew bottles built for this macOS
+      # version, so an older tag would promise compatibility the payload
+      # cannot deliver. Raise it in step with the `macos-*` runner images
+      # in the matrix above.
+      - name: Pin the macOS deployment target
+        if: runner.os == 'macOS'
+        shell: bash
+        run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> "$GITHUB_ENV"
+
+      - name: Build the wheel
+        uses: pypa/cibuildwheel@v4.1.0
+        with:
+          package-dir: gwyddionpy-converter
+          output-dir: wheelhouse
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  # Produces the tarball attached to the GitHub Release, which
+  # gwyddionpy's `gwyddionpy-fetch-converter` / _fetch_converter.py
+  # downloads. Independent of the wheels above; renaming the asset here
+  # means updating ci/build-linux.sh (ASSET_NAME) and
+  # gwyddionpy/src/gwyddionpy/_fetch_converter.py (_asset_name) together.
   linux:
     name: Build gwyconvert (linux-x86_64)
     runs-on: ubuntu-latest
-    # Built inside Rocky Linux 8 (glibc 2.28 — the same floor as the
-    # manylinux_2_28 wheel standard) rather than on the runner's own
-    # Ubuntu: glibc is forward-compatible only, so the bundle runs on
-    # anything with glibc >= 2.28 (RHEL/Rocky/Alma 8+, Debian 10+,
-    # Ubuntu 18.10+). A plain runner can't get anywhere near that —
-    # ubuntu-22.04 is the oldest hosted image (glibc 2.35), which a real
-    # user confirmed 2026-07-22 already excludes RHEL 9 (2.34); an
-    # ubuntu-latest (24.04, glibc 2.39) build failed outright on Debian
-    # bookworm (2.36). Verified locally in Docker 2026-07-22: this exact
-    # recipe's bundle reports the same 170 formats on bookworm, Rocky 9,
-    # and Ubuntu 20.04, incl. a real Bruker .spm conversion through
-    # gwyddionpy.load() on bookworm. Not the official manylinux image on
-    # purpose: it ships none of GTK2/GLib/FFTW/Pango (we'd be building
-    # that whole stack from source); EL8 still packages all of them.
+    # Rocky Linux 8, not the runner's Ubuntu: glibc is forward-compatible
+    # only, so building against glibc 2.28 is what lets the bundle run on
+    # RHEL/Rocky/Alma 8+, Debian 10+ and Ubuntu 18.10+. The oldest hosted
+    # runner image (ubuntu-22.04, glibc 2.35) would already exclude RHEL 9
+    # and Debian bookworm. 2.28 is also the manylinux_2_28 floor the wheels
+    # use, so both artifacts have the same reach.
+    # https://peps.python.org/pep-0600/
+    #
+    # Not the official manylinux image: it ships no GTK2/GLib/FFTW/Pango,
+    # which would mean building that entire stack from source. EL8 packages
+    # all of them.
     container: rockylinux:8
     steps:
-      # Everything below runs INSIDE the container, so dependencies (and
-      # the gh CLI for the upload step) come from dnf, not the runner
-      # image. Repo notes: fftw-devel lives in PowerTools (CRB), patchelf
-      # in EPEL, gh in GitHub's own rpm repo.
+      # Runs inside the container, so every dependency — including the gh
+      # CLI used by the upload step — comes from dnf rather than the runner
+      # image. Repo layout: fftw-devel is in PowerTools (CRB), patchelf in
+      # EPEL, gh in GitHub's own rpm repo.
       - name: Install build dependencies
         run: |
           dnf -y install dnf-plugins-core
@@ -67,36 +139,33 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      # Builds Gwyddion itself from its official SourceForge release
-      # tarball (not a distro package) — see V1_IMPLEMENTATION.md:
-      # --without-gl drops the OpenGL/GLX/gtkglext dependency entirely.
-      # gcc-toolset-12 is required, not optional: EL8's default GCC 8.5
-      # rejects Gwyddion 2.71's OpenMP shared() clauses ("predetermined
-      # 'shared'"); the toolset compiler still targets glibc 2.28.
+      # Builds Gwyddion from its official source tarball rather than a
+      # distro package (see ci/build-gwyddion.sh for why). gcc-toolset-12
+      # is required, not optional: EL8's default GCC 8.5 rejects Gwyddion
+      # 2.71's OpenMP shared() clauses ("predetermined 'shared'"), while
+      # the toolset compiler still targets glibc 2.28.
       - name: Build, bundle, and package gwyconvert
         # $GITHUB_WORKSPACE, not ${{ github.workspace }}: in container jobs
-        # the expression resolves to the runner's HOST path, not the
-        # container mount (actions/runner#2058); the GITHUB_WORKSPACE env
-        # var inside the step is always the container-correct one.
+        # the expression resolves to the runner's HOST path rather than the
+        # container mount, while the env var inside the step is always
+        # container-correct. https://github.com/actions/runner/issues/2058
         run: |
           source /opt/rh/gcc-toolset-12/enable
           export OUT_DIR="$GITHUB_WORKSPACE/dist-converter"
           gwyddionpy-converter/ci/build-linux.sh
 
       - name: Upload to the release
-        # github.event_name here still reads 'release' (the caller's
-        # triggering event), not 'workflow_call' — known GH Actions
-        # behavior, the event_name a called workflow sees is the
-        # original one, not workflow_call. So gate on the `tag` input
-        # itself: it's only ever set when publish.yml calls this
-        # reusably; empty on the standalone pull_request trigger.
+        # Gated on `inputs.tag`, not github.event_name: a called workflow
+        # sees the CALLER's event name ('release'), never 'workflow_call',
+        # so event_name cannot distinguish the two entry points. The tag
+        # input can — publish.yml always sets it, pull_request never does.
         if: inputs.tag != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Container jobs check out the repo with a different UID than the
-          # one git sees at runtime, tripping the safe.directory ownership
-          # guard (CVE-2022-24765) the moment `gh` shells out to git.
+          # Container jobs check the repo out under a different UID than git
+          # runs as, which trips git's ownership guard as soon as `gh`
+          # shells out to it. https://nvd.nist.gov/vuln/detail/CVE-2022-24765
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           gh release upload "${{ inputs.tag }}" \
             dist-converter/gwyconvert-linux-x86_64.tar.gz \

@@ -19,7 +19,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+    # One wheel per platform; keep in step with the runner matrix in
+    # .github/workflows/build-converter.yml.
     "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
 ]
 
 [project.urls]
@@ -33,16 +37,98 @@ include-package-data = true
 where = ["src"]
 
 [tool.uv]
-# This package is only published to TestPyPI so far; extra-index-url
-# keeps real PyPI available as a fallback for its build/dev dependencies.
+# Published to TestPyPI only so far; extra-index-url keeps real PyPI
+# available for build/dev dependencies. Drop both lines when this package
+# moves to production PyPI (gwyddionpy/pyproject.toml has the same pair).
 index-url = "https://test.pypi.org/simple"
 extra-index-url = ["https://pypi.org/simple"]
 
+# cibuildwheel builds one wheel per platform for four targets: Linux glibc
+# x86_64, macOS arm64 and x86_64, Windows x86_64.
+# https://cibuildwheel.pypa.io/en/stable/options/
+[tool.cibuildwheel]
+# One wheel per platform, NOT per Python version. The payload is a
+# standalone executable run via subprocess, so it depends on no Python ABI
+# and setup.py tags it py3-none-<platform> — one wheel serves every Python.
+# cibuildwheel's build identifiers are always version-specific, so pinning
+# to a single interpreter is how "build once" is expressed here; building
+# every version would repeat a multi-minute Gwyddion build for identical
+# output.
+build = "cp312-*"
+
+# musllinux is out of scope: it would mean building the whole GTK2 stack a
+# second time against musl. Removing this line silently adds that build.
+skip = "*musllinux*"
+
+# glibc 2.28 floor: covers RHEL/Rocky/Alma 8+, Debian 10+, Ubuntu 18.10+.
+# cibuildwheel's newer default would exclude RHEL 9 (2.34) and Debian
+# bookworm (2.36). Matches the Rocky Linux 8 tarball job in
+# build-converter.yml, so both artifacts have the same reach.
+# https://peps.python.org/pep-0600/
+manylinux-x86_64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+# {package}, not {project}: {project} always resolves to the repo root,
+# while the ci/ scripts live in this package directory. {project} silently
+# yields a path with no ci/ dir.
+before-all = "bash {package}/ci/cibw-before-all-linux.sh"
+
+# The version must be passed in from outside: setuptools-scm reads git tags
+# via root = "..", and the repo's .git is not usable from inside the build
+# container. environment-pass forwards the variable across that boundary
+# (Linux only — see the macOS note below). publish.yml sets it from the
+# release tag; locally, export it to whatever you want the wheel called.
+environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER"]
+
+# No auditwheel: ci/bundle-linux.sh already produced a self-contained,
+# RPATH-patched bundle, and it walks Gwyddion's dlopen()'d format plugins,
+# which auditwheel cannot see. Re-running repair would duplicate that work
+# and could rewrite the RPATHs it just set, so repair is a plain copy.
+repair-wheel-command = "cp {wheel} {dest_dir}"
+
+# Smoke test, cheap and load-bearing: a bundle that lost its format plugins
+# still exits 0 and prints an empty list, so assert on the format count
+# rather than the exit status. Same command on all three platforms.
+test-command = "python -c \"import json,subprocess;from gwyddionpy_converter import binary_path;n=len(json.loads(subprocess.run([str(binary_path()),'--list-formats'],capture_output=True,text=True,check=True).stdout));print(f'{n} formats');assert n>100,f'only {n} formats - bundle is missing its plugins'\""
+
+[tool.cibuildwheel.macos]
+# "native" only — never universal2 or a cross build: Homebrew ships bottles
+# for the host architecture alone, so an arm64 wheel built on an Intel
+# runner would have no arm64 GTK2/GLib/FFTW to link against. Both
+# architectures are covered by running on two runners instead (macos-15 for
+# arm64, macos-15-intel for x86_64, in build-converter.yml).
+archs = ["native"]
+before-all = "bash {package}/ci/cibw-before-all-macos.sh"
+# No delocate, for the Linux reason: ci/bundle-macos.sh has already
+# rewritten every install name to @loader_path and re-signed the results,
+# and delocate cannot see the dlopen()'d format plugins. Running it would
+# duplicate the work and risk undoing those rewrites.
+repair-wheel-command = "cp {wheel} {dest_dir}"
+test-command = "python -c \"import json,subprocess;from gwyddionpy_converter import binary_path;n=len(json.loads(subprocess.run([str(binary_path()),'--list-formats'],capture_output=True,text=True,check=True).stdout));print(f'{n} formats');assert n>100,f'only {n} formats - bundle is missing its plugins'\""
+# environment-pass is Linux-only: it exists to cross the Docker container
+# boundary. macOS and Windows build directly on the host, where
+# SETUPTOOLS_SCM_PRETEND_VERSION_FOR_* is already visible.
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
+# No before-all, unlike Linux/macOS: cibuildwheel runs Windows commands
+# under cmd, while the Gwyddion build needs a full MSYS2 MinGW64 shell.
+# build-converter.yml therefore runs ci/build-windows-bundle.sh as its own
+# msys2 step BEFORE cibuildwheel — change one and change the other.
+# setup.py's _check_bundle_present() turns an ordering mistake into a loud
+# failure rather than an empty wheel.
+#
+# No delvewheel (the Windows default): it would re-bundle DLLs the bundle
+# script already placed, and cannot see the dlopen()'d modules' own deps.
+# Spelled as a Python one-liner rather than `cp` because this runs in cmd.
+repair-wheel-command = "python -c \"import shutil,sys;shutil.copy(sys.argv[1],sys.argv[2])\" {wheel} {dest_dir}"
+test-command = "python -c \"import json,subprocess;from gwyddionpy_converter import binary_path;n=len(json.loads(subprocess.run([str(binary_path()),'--list-formats'],capture_output=True,text=True,check=True).stdout));print(f'{n} formats');assert n>100,f'only {n} formats - bundle is missing its plugins'\""
+
 [tool.setuptools_scm]
-# Same repo, same tags as gwyddionpy/pyproject.toml's [tool.setuptools_scm]
-# (OQ7c: converter releases share the Python package's tag) — both packages
-# derive their version from the identical git tag automatically, with no
-# extra wiring needed.
+# root = ".." points at the repo root, so this package and gwyddionpy derive
+# their versions from the same git tag with no extra wiring. That shared tag
+# is what publish.yml's lockstep pin relies on.
 root = ".."
 version_scheme = "no-guess-dev"
 local_scheme = "node-and-date"

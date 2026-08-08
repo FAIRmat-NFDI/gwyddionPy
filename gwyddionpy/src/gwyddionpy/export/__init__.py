@@ -1,1 +1,1 @@
-"""Export backends consuming GwyData (see docs/EXTENDING.md)."""
+"""Export backends consuming GwyData. Reached through GwyData.to_*()."""

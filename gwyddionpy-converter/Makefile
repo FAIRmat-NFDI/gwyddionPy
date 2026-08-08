@@ -1,9 +1,13 @@
-# Requires Gwyddion development headers: see ../docs/BUILD.md
+# Builds gwyconvert against an already-installed Gwyddion — the local
+# development path (see ../docs/user/how-to.md). Release artifacts are NOT
+# built this way: ci/build-gwyddion.sh builds Gwyddion itself from source
+# first, so the result is portable.
 #
-# Preferred flags come from pkg-config's gwyddion module. On Ubuntu that
-# fails unless libgtkglext1-dev is also installed (gwyddion.pc Requires
-# gtkglext-1.0), so there is a manual fallback that links the Gwyddion
-# libraries directly — sufficient because gwyconvert uses no GL widgets.
+# Flags come from pkg-config's gwyddion module where available. On Debian
+# and Ubuntu that lookup fails unless libgtkglext1-dev is installed, since
+# gwyddion.pc lists gtkglext-1.0 in Requires — hence the fallback, which
+# links the Gwyddion libraries directly. It is sufficient because
+# gwyconvert uses no GL widgets.
 CC      ?= gcc
 CFLAGS  ?= -O2 -Wall
 

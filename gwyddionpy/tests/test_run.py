@@ -57,10 +57,11 @@ def _install_fake_converter_package(tmp_path, monkeypatch, body):
 def test_installed_converter_package_fallback(
     no_converter_anywhere, tmp_path, monkeypatch
 ):
-    """gwyddionpy-converter is now a hard dependency (pyproject.toml) that
-    ships gwyconvert as installed-package data; find_converter() must fall
-    back to gwyddionpy_converter.binary_path() when PATH/env var don't
-    resolve — this is the discovery step that was missing (D6 item 4)."""
+    """The `gwyddionpy[converter]` extra ships gwyconvert as package data,
+    so find_converter() must fall back to
+    gwyddionpy_converter.binary_path() once the env var and PATH come up
+    empty. This is what makes `pip install "gwyddionpy[converter]"` work
+    with no further setup."""
     binary = tmp_path / "gwyconvert"
     binary.write_text("#!/bin/sh\necho stub\n")
     binary.chmod(0o755)
