@@ -73,15 +73,24 @@ def parse_gwy(path) -> GwyData:
     """Parse a .gwy file into GwyData (channels as NumPy + metadata)."""
     path = Path(path)
     try:
-        obj = gwyfile.load(str(path))
+        return _parse(path)
     except Exception as error:
-        # gwyfile deserializes straight from the byte stream and signals a
-        # damaged container in whatever way the corruption happens to break
-        # it: AssertionError (sometimes with no message at all), ValueError,
-        # struct.error, UnicodeDecodeError. None of those are meaningful to a
-        # caller, and an AssertionError would additionally vanish under
-        # `python -O`, so the whole family is reported as one typed error.
+        # Everything from here to the finished GwyData is interpretation of
+        # bytes the caller did not write, and gwyfile signals damage in
+        # whatever way the corruption happens to break it: AssertionError
+        # (sometimes with no message at all), KeyError, AttributeError,
+        # ValueError, struct.error, UnicodeDecodeError. Truncating one small
+        # container at each of its 786 offsets produced four of those.
+        #
+        # Note that the whole read is wrapped, not just the initial load:
+        # gwyfile reshapes a channel's array lazily, when the attribute is
+        # first touched, so a corrupt shape surfaces well after the file has
+        # apparently been read successfully.
         raise UnsupportedFormatError(_damage_report(path, error)) from error
+
+
+def _parse(path: Path) -> GwyData:
+    obj = gwyfile.load(str(path))
 
     numbers = sorted(
         int(m.group("num")) for k in obj if (m := _DATA_KEY.match(k))
