@@ -1,16 +1,9 @@
-"""Giving up on a converter that does not come back.
+"""Giving up on a converter that does not come back, which would otherwise
+block its caller for the life of the process. The real converter gets a
+deadline it cannot meet, rather than a stub that sleeps.
 
-Without a limit, a converter that hangs blocks its caller for as long as the
-process lives, with no error and no way out. Every call therefore carries a
-deadline, and the tests below drive the real converter against a deadline it
-cannot meet rather than standing in a stub that sleeps: what needs proving is
-that a real running process is stopped and reported, not that a mock was
-called.
-
-warning: the deadline is a safety net for a hung process, not a performance
-budget. DEFAULT_TIMEOUT is deliberately far above any legitimate reading time,
-so a file that trips it should be treated as a fault to investigate rather
-than a reason to raise the number.
+DEFAULT_TIMEOUT is a safety net, not a performance budget: a file that
+trips it is a fault to investigate, not a reason to raise the number.
 """
 import tempfile
 import time
@@ -23,13 +16,12 @@ from gwyddionpy._run import DEFAULT_TIMEOUT, query_formats, run_converter
 from helpers.requirements import require_specimen
 from helpers.specimens import SPECIMENS_BY_ID
 
-#: Short enough that no process can finish inside it, so the deadline is
-#: certain to be the thing that ends the call.
+#: Short enough that no process finishes inside it, so the deadline is
+#: certainly what ends the call.
 UNMEETABLE = 0.001
 
-#: How long the call itself may take once its deadline has passed. Generous
-#: against a loaded machine while still failing if nothing was actually
-#: stopped.
+#: How long the call may take once its deadline has passed. Generous on a
+#: loaded machine, but still fails if nothing was actually stopped.
 OVERSHOOT_ALLOWANCE = 30.0
 
 BRUKER = "bruker_nanoscope/VGEP-15m-.0_00000.spm"
@@ -64,8 +56,8 @@ def test_the_overrun_is_catchable_as_a_gwyddionpy_error(specimen):
 
 
 def test_the_underlying_fault_is_preserved(specimen):
-    """Keeping the TimeoutExpired as the cause means the traceback still says
-    what actually happened."""
+    """Keeping TimeoutExpired as the cause leaves the traceback saying what
+    actually happened."""
     import subprocess
 
     with pytest.raises(gwyddionpy.ConversionError) as raised:
@@ -96,8 +88,8 @@ def test_a_generous_deadline_does_not_disturb_a_normal_reading(specimen):
 
 
 def test_the_deadline_reaches_the_converter_directly(specimen, tmp_path):
-    """run_converter is the layer that owns the deadline; check it there too,
-    not only through load()."""
+    """run_converter owns the deadline, so check it there too, not only
+    through load()."""
     with pytest.raises(gwyddionpy.ConversionError):
         run_converter(specimen.path, tmp_path / "out.gwy", timeout=UNMEETABLE)
 
@@ -113,8 +105,8 @@ def test_listing_formats_still_works_with_a_generous_deadline():
 
 
 def test_reading_a_native_gwy_ignores_the_deadline(tmp_path):
-    """context part: a .gwy is read in-process, with no converter to stop, so
-    an unmeetable deadline must not affect it."""
+    """A .gwy is read in-process, with no converter to stop, so an
+    unmeetable deadline must not affect it."""
     import numpy as np
 
     from helpers.gwy_builder import make_gwy

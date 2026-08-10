@@ -17,15 +17,13 @@ from ._errors import ConversionError, ConverterNotFoundError, UnsupportedFormatE
 ENV_VAR = "GWYDDIONPY_CONVERT"
 BINARY_NAME = "gwyconvert"
 
-#: Seconds to let the converter run before giving up on it. Deliberately
-#: generous: it exists to turn an indefinite hang into a bounded, reported
-#: failure, not to police how long a legitimate conversion may take. Large
-#: scans are slow, and a caller who needs longer passes ``timeout=``.
+#: Seconds to let the converter run before giving up. Generous on purpose:
+#: it turns a hang into a reported failure, and is not a performance budget.
+#: A caller who needs longer passes ``timeout=``.
 DEFAULT_TIMEOUT = 300.0
 
-#: Why a raw file that no module claims usually is not claimed. The
-#: converter's own message says only that nothing could load the file, which
-#: leaves the caller with nowhere to go next.
+#: Why a raw file might not be claimed by any module. The converter's own
+#: message only says that nothing could load it.
 _UNREADABLE_CAUSES = (
     "the format is not one Gwyddion can read",
     "the file is empty, truncated, or incomplete",
@@ -39,30 +37,17 @@ _OTHER_LOCALE_CATEGORIES = (
     "LC_CTYPE", "LC_COLLATE", "LC_TIME", "LC_MONETARY", "LC_MESSAGES",
 )
 
-#: Name of the empty file GdkPixbuf is pointed at. Lives in the cache
-#: directory because that is what it is: a fixed, reproducible artefact this
-#: package creates once and reuses, safe to delete at any time.
+#: Empty file that GdkPixbuf is pointed at. It lives in the cache directory
+#: because that is what it is: created once, reused, safe to delete.
 _PIXBUF_CACHE_NAME = "no-pixbuf-loaders.cache"
 
 
 def _empty_pixbuf_loader_cache() -> str:
-    """An existing empty file to point GdkPixbuf's loader cache at.
+    """Return an empty file to use as GdkPixbuf's loader cache.
 
-    It has to be a real, readable, regular file. The obvious choice is the
-    null device, and that works on POSIX because /dev/null is readable and
-    yields no loaders. On Windows os.devnull is "nul", a character device
-    GLib cannot build a readable channel from: GdkPixbuf then trips
-
-        GLib-CRITICAL **: g_io_channel_read_line: assertion
-        'channel->is_readable' failed
-
-    on every run, successful ones included, which is exactly the noise this
-    is here to prevent. A path that does not exist is no good either — that
-    produces GdkPixbuf's "your installation is broken" warning. An empty
-    file is silent on every platform.
-
-    Falls back to the null device if the cache directory cannot be written,
-    since a read-only or absent home is not a reason to fail a conversion.
+    Must be a real readable file: the null device makes Windows print a
+    GLib assertion, and a missing path triggers an "installation is broken"
+    warning. Falls back to the null device on an unwritable cache directory.
     """
     from platformdirs import user_cache_dir
 
@@ -78,33 +63,11 @@ def _empty_pixbuf_loader_cache() -> str:
 
 
 def converter_environment() -> dict:
-    """The environment the converter subprocess runs in.
+    """Build the environment the converter subprocess runs in.
 
-    The converter prints numbers the way the machine is configured to print
-    them, so the same measurement yields "0,881" on a German-configured
-    machine and "0.881" on an English one. Callers read that value as a
-    number, so it has to mean the same thing everywhere: the decimal mark is
-    pinned here, and nothing else is touched.
-
-    A locale is not one setting but several independent ones:
-
-        LC_NUMERIC  decimal mark, "." or ","     <- the only one to change
-        LC_CTYPE    character encoding           <- µm and °C live here
-        LC_TIME, LC_COLLATE, LC_MONETARY, LC_MESSAGES
-
-    So not LC_ALL=C, which would set all of them at once and drop LC_CTYPE
-    to ASCII, mangling the µm and °C this metadata is full of.
-
-    Setting LC_NUMERIC on its own is not enough either. POSIX ranks LC_ALL
-    above the individual categories, so a caller who exported
-    LC_ALL=de_DE.UTF-8 would still get commas back. LC_ALL is therefore
-    copied into the remaining categories and then removed, which preserves
-    every choice the caller made except the decimal mark:
-
-        caller sets  LC_ALL=de_DE.UTF-8
-        converter gets  LC_NUMERIC=C            (numbers: "0.881")
-                        LC_CTYPE=de_DE.UTF-8    (µm still works)
-                        LC_TIME=de_DE.UTF-8     (and the rest unchanged)
+    Pins the decimal mark only, so metadata numbers do not follow the
+    machine's locale. LC_ALL is spread across the other categories and then
+    removed, since it would otherwise outrank LC_NUMERIC.
     """
     env = dict(os.environ)
     lc_all = env.pop("LC_ALL", None)
@@ -113,33 +76,20 @@ def converter_environment() -> dict:
             env[category] = lc_all
     env["LC_NUMERIC"] = "C"
 
-    # Keep the converter's stderr for real diagnostics. GTK otherwise tries
-    # to load its accessibility modules and GdkPixbuf looks for a loader
-    # cache at a path that only exists inside the build container, producing
-    # several warnings on every run — successful ones included — which then
-    # end up quoted in this package's own error messages. gwyconvert draws
-    # nothing and the bundle carries no pixmap module, so neither is needed;
-    # the format list and every conversion are unchanged with both cleared.
-    # See _empty_pixbuf_loader_cache() for why GdkPixbuf gets an empty file
-    # rather than the null device.
-
+    # Keep stderr for real diagnostics: GTK and GdkPixbuf otherwise warn on
+    # every run. gwyconvert draws nothing, so clearing them changes no output.
     env["GTK_MODULES"] = ""
     env["GDK_PIXBUF_MODULE_FILE"] = _empty_pixbuf_loader_cache()
     return env
 
 
 def find_converter(explicit: Optional[str] = None) -> str:
-    """Resolve the gwyconvert binary, in this order:
+    """Resolve the gwyconvert binary: the ``explicit`` argument, then
+    ``GWYDDIONPY_CONVERT``, ``PATH``, the installed converter wheel, and
+    finally a binary fetched by ``ensure_converter()``.
 
-    1. the ``explicit`` argument,
-    2. the ``GWYDDIONPY_CONVERT`` environment variable,
-    3. ``gwyconvert`` on ``PATH``,
-    4. the ``gwyddionpy-converter`` wheel, if installed,
-    5. a binary previously downloaded by ``gwyddionpy.ensure_converter()``.
-
-    The two explicit overrides (1 and 2) raise when set but pointing at no
-    file, rather than falling through — a wrong override is a mistake worth
-    reporting, not something to silently paper over with another candidate.
+    The first two raise when they point at no file rather than falling
+    through, since a wrong override is worth reporting.
     """
     if explicit is not None:
         if Path(explicit).is_file():
@@ -175,7 +125,8 @@ def find_converter(explicit: Optional[str] = None) -> str:
         f"cannot find {BINARY_NAME!r}: install it with "
         f"`pip install 'gwyddionpy[converter]'`, set {ENV_VAR}, add it to "
         "PATH, or run `gwyddionpy-fetch-converter` to download a prebuilt "
-        "binary. See docs/user/how-to.md for the full instructions."
+        "binary. Full instructions: https://github.com/FAIRmat-NFDI/"
+        "gwyddionPy/blob/main/docs/user/how-to.md"
     )
 
 
@@ -204,8 +155,7 @@ def run_converter(
             env=converter_environment(),
         )
     except subprocess.TimeoutExpired as expired:
-        # subprocess.run has already killed the child and reaped it, so
-        # there is nothing left running by the time this is raised.
+        # subprocess.run has already killed and reaped the child by now.
         raise ConversionError(
             f"{BINARY_NAME} did not finish within {timeout:g} s while reading "
             f"{input_path}, and was stopped. Pass a larger timeout= if the "

@@ -1,14 +1,8 @@
-"""Reading the same file twice must give the same answer.
+"""Reading the same file twice must give the same answer: uninitialised
+memory in a C reader shows up here and nowhere else.
 
-Cheap to check and worth checking: uninitialised memory in a C reader, a
-hash-ordered container, or anything else that varies between runs shows up
-here as a difference between two readings of one file, and nowhere else in
-the suite.
-
-warning: the intermediate .gwy is deliberately *not* compared byte for byte.
-Gwyddion stamps the conversion time into the container, so two readings of
-the same measurement differ in those bytes and in nothing else — byte
-equality would fail for a reason that has nothing to do with the data.
+The intermediate .gwy is deliberately not compared byte for byte, since
+Gwyddion stamps the conversion time into it.
 """
 import hashlib
 import json
@@ -70,8 +64,8 @@ def test_repeated_readings_stay_stable(specimen):
 
 
 def test_a_fresh_process_reads_the_same_values():
-    """Anything carried over inside one interpreter — a cache, a module-level
-    variable — would hide here, so the comparison crosses a process boundary."""
+    """A cache or module-level variable would hide inside one interpreter,
+    so this comparison crosses a process boundary."""
     specimen = SPECIMENS_BY_ID[WSXM]
     require_specimen(specimen)
 
@@ -108,10 +102,9 @@ def test_channel_order_is_stable():
 
 
 def test_pixel_data_is_identical_to_the_last_bit():
-    """The comparisons elsewhere allow a relative tolerance for differences
-    between builds. Two readings on one machine have no such excuse: every
-    value must match exactly, which is what would expose uninitialised
-    memory behind the data."""
+    """Comparisons elsewhere allow a tolerance for differences between
+    builds. Two readings on one machine have no such excuse, and an exact
+    match is what would expose uninitialised memory behind the data."""
     import numpy as np
 
     specimen = SPECIMENS_BY_ID[WSXM]
@@ -127,9 +120,8 @@ def test_pixel_data_is_identical_to_the_last_bit():
 
 
 def test_the_converted_file_differs_only_in_its_timestamp():
-    """context part: pins the reason byte equality is not asserted. If a
-    future build made the output reproducible, or made it vary in some new
-    way, this is what would notice."""
+    """Pins the reason byte equality is not asserted. A build that became
+    reproducible, or started varying some new way, would show up here."""
     from gwyddionpy._run import run_converter
 
     specimen = SPECIMENS_BY_ID[WSXM]

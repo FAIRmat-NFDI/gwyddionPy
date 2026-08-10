@@ -1,20 +1,22 @@
 """Build real .gwy files with the gwyfile writer.
 
-No mocks: the same library that parses production files parses these, so a
-synthetic fixture exercises the identical code path a real file does.
+No mocks. The library that parses production files parses these too, so a
+built fixture exercises the same code path a real file does.
 """
 import numpy as np
 from gwyfile.objects import GwyContainer, GwyDataField, GwySIUnit
 
 
 def make_gwy(path, channels):
-    """Write a .gwy file. channels: list of dicts with keys
-    name, data, xreal, yreal, unit_xy, unit_z, meta (all optional but data)."""
-    # Text components get an explicit "s" typecode: gwyfile would otherwise
-    # store a one-character string as Gwyddion's char type, which reads back
-    # as a number. Real files written by Gwyddion do not have that problem,
-    # so neither should a constructed one.
-    # The mapping is copied by GwyContainer, so it must be complete up front.
+    """Write a .gwy file.
+
+    ``channels`` is a list of dicts with the keys name, data, xreal, yreal,
+    unit_xy, unit_z and meta. All are optional except data.
+    """
+    # Text gets an explicit "s" typecode, as in gwyddionpy.export.gwy: left
+    # to infer, gwyfile stores a one-character string as Gwyddion's char
+    # type and it reads back as a number. GwyContainer copies the mapping,
+    # so it must be complete before the container exists.
     container = GwyContainer(typecodes={
         f"/{num}/data/title": "s" for num in range(len(channels))
     })

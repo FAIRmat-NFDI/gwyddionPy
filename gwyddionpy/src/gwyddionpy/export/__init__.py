@@ -1,4 +1,4 @@
-"""Export backends consuming GwyData. Reached through GwyData.to_*()."""
+"""Export backends for GwyData. Reached through GwyData.to_*()."""
 from __future__ import annotations
 
 from typing import Dict, Iterable
@@ -7,15 +7,9 @@ from typing import Dict, Iterable
 def channel_keys(names: Iterable[str]) -> Dict[str, str]:
     """Map channel names onto the keys the exports store them under.
 
-    "/" is HDF5's path separator and cannot appear in a group name, so it
-    becomes "_". That substitution can land two different channels on the
-    same key — "A/B" and "A_B" — which silently lost one of them in the dict
-    export and aborted the HDF5 one part-way through. A clash now gets the
-    same " (n)" suffix already used for duplicate channel titles and
-    duplicate metadata keys, so every channel survives under a distinct key.
-
-    Shared by both exports so they keep the identical layout their docstrings
-    promise.
+    "/" cannot appear in an HDF5 group name and becomes "_", which can land
+    two channels on one key ("A/B" and "A_B"); a clash gets a " (n)" suffix
+    so every channel keeps a distinct key. Shared by both exports.
     """
     keys: Dict[str, str] = {}
     taken = set()

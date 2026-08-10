@@ -1,13 +1,8 @@
-"""Real measurements carried all the way through to the exported formats.
+"""Real measurements carried through to the exported formats.
 
-The reference tests establish that a file is read correctly. These follow the
-same content one step further — into the dict, into HDF5, and back out
-through a written .gwy — and check that nothing is dropped, renamed or
-rounded away along the route a caller actually takes.
-
-Files are opened one at a time, as in the reference tests: the fixture is
-parametrized at module scope, so every check runs against one measurement
-before the next is read.
+The reference tests establish that a file is read correctly; these carry
+the same content into the dict, into HDF5 and back out through a written
+.gwy, checking nothing is dropped, renamed or rounded away.
 """
 import numpy as np
 import pytest
@@ -105,10 +100,9 @@ def test_written_gwy_reads_back_with_the_same_content(reading, tmp_path):
 
 
 def test_written_gwy_does_not_claim_a_source_format(reading, tmp_path):
-    """context part: source_format records which module read the original
-    measurement. A .gwy written from that data was not read by any vendor
-    module, so the field is empty rather than inherited — worth pinning so a
-    caller relying on it is not surprised."""
+    """source_format records which module read the original measurement. A
+    .gwy written from that data was read by no vendor module, so the field
+    is empty rather than inherited."""
     _, data = reading
     out = tmp_path / "written.gwy"
     data.to_gwy(out)

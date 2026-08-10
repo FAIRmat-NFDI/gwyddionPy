@@ -1,30 +1,8 @@
 """How much memory a conversion costs, and whether that scales sensibly.
 
-The converter is a C program built on GTK and Gwyddion, so leaks are the
-obvious worry. In this architecture most of them do not matter: gwyconvert
-reads one file and exits, and the operating system takes everything back. The
-leak that *does* matter is one inside a single conversion, because it grows
-with the measurement being read — a large scan then runs out of memory
-before it finishes rather than merely wasting some.
-
-That is what these check. Cost is separated into two parts, because they
-behave differently and only one of them is a leak signal:
-
-  fixed     starting GTK and registering ~170 format modules. Paid once,
-            independent of the file — measured at roughly 23 MB.
-  per-data  proportional to the pixels being read. Measured at roughly
-            twice the pixel bytes, which is what holding a read buffer and
-            a converted field at the same time costs.
-
-A leak proportional to the data shows up as the second number climbing while
-the first stays put, which is why it is measured on its own rather than as a
-single total. The limits are set well above what was measured, so this is a
-guard against a change in kind — a copy that should have been freed, an extra
-buffer per channel — not a budget to tune.
-
-context part: a thorough answer needs valgrind or AddressSanitizer, which
-cannot run in the ordinary suite (see §2.20 of the test plan). This is the
-part that costs nothing and catches the gross cases.
+Cost splits into a fixed part (starting GTK, ~23 MB) and a per-data part
+(~2x the pixel bytes); only the second is a leak signal. Limits sit well
+above what was measured, so these catch a change in kind, not a budget.
 """
 import subprocess
 import sys
@@ -38,13 +16,11 @@ from helpers.specimens import IMAGE_SPECIMENS, SPECIMENS_BY_ID
 
 TESTS_DIR = Path(__file__).resolve().parents[1]
 
-#: Measured ~23 MB to start GTK and register the format modules. The limit
-#: allows a wide margin for other builds and platforms while still failing if
-#: start-up cost changes by an order of magnitude.
+#: Measured ~23 MB. The margin covers other builds and platforms while
+#: still catching a start-up cost that changes by an order of magnitude.
 FIXED_COST_LIMIT_MB = 150.0
 
-#: Measured ~1.5-2.2x the pixel bytes. Four allows roughly a doubling before
-#: complaining, which a per-channel buffer that is never freed would exceed.
+#: Measured ~1.5-2.2x the pixel bytes. Four allows roughly a doubling.
 PER_DATA_LIMIT = 4.0
 
 NO_PIXELS = "nanonis/Bias-Spectroscopy002.dat"
@@ -71,12 +47,9 @@ except ImportError:                # pragma: no cover - Windows
 
 
 def peak_megabytes(specimen) -> float:
-    """Peak memory of one conversion, measured in a process of its own.
-
-    A fresh process each time, because the figure the system reports is a
-    high-water mark that never comes down — measuring several conversions in
-    one process would only ever report the largest.
-    """
+    """Peak memory of one conversion, in a process of its own. The reported
+    figure is a high-water mark that never comes down, so several
+    conversions in one process would only report the largest."""
     result = subprocess.run(
         [sys.executable, "-c", MEASURE.format(tests=str(TESTS_DIR)),
          str(specimen.path)],
@@ -98,13 +71,13 @@ def largest_and_smallest():
 
 pytestmark = pytest.mark.skipif(
     not CAN_MEASURE,
-    reason="peak memory needs POSIX getrusage; see §2.20 for the Windows gap",
+    reason="peak memory needs getrusage, which Windows does not provide",
 )
 
 
 def test_the_fixed_cost_is_paid_once_and_is_modest():
-    """A file with no image data at all isolates start-up from everything
-    else: whatever this costs is GTK and the module registry."""
+    """A file with no image data isolates start-up: whatever this costs is
+    GTK and the module registry."""
     specimen = SPECIMENS_BY_ID[NO_PIXELS]
     require_specimen(specimen)
     assert pixel_megabytes(specimen) == 0, "this file is supposed to hold no images"
@@ -131,12 +104,9 @@ def test_a_conversion_stays_within_a_bounded_multiple_of_its_data(specimen):
 
 
 def test_memory_grows_only_in_proportion_to_the_data():
-    """The leak-shaped question, asked without depending on the fixed cost.
-
-    Comparing the largest measurement with the smallest cancels the start-up
-    cost out, leaving the megabytes spent per megabyte of pixels. A leak that
-    scales with the data pushes this up; a bigger GTK does not touch it.
-    """
+    """The leak-shaped question, asked without the fixed cost in the way:
+    comparing largest against smallest cancels start-up out, leaving
+    megabytes spent per megabyte of pixels."""
     smallest, largest = largest_and_smallest()
     for specimen in (smallest, largest):
         require_specimen(specimen)
@@ -156,9 +126,8 @@ def test_memory_grows_only_in_proportion_to_the_data():
 
 
 def test_reading_the_same_file_twice_costs_the_same():
-    """Two separate conversions of one file must cost the same, since each
-    starts from nothing. A difference would mean something outlives the
-    process, which is the one place a leak could accumulate here."""
+    """Each conversion starts from nothing, so a difference would mean
+    something outlives the process."""
     specimen = SPECIMENS_BY_ID["wsxm/sample_0.top"]
     require_specimen(specimen)
 

@@ -1,17 +1,8 @@
-"""Which platform the suite is running on, and which one it was told to expect.
+"""Which platform the suite runs on, and which one it was told to expect.
 
-The converter is built for Linux, macOS and Windows, and the three differ in
-ways the tests care about: how the binary is launched, what a path looks like,
-whether the system can report a child process's peak memory. Those differences
-are worth asserting, not skipping past.
-
-Skipping is what makes a cross-platform suite untrustworthy. A macOS leg that
-quietly skips every macOS-specific test is indistinguishable from one that
-passes, and a leg misconfigured to run on the wrong image looks fine either
-way. So tests here are written to run everywhere and assert what is true of
-the platform they find themselves on, and a run can additionally be told which
-platform it is supposed to be — in which case being anywhere else is an error
-rather than a shrug.
+Differences are asserted rather than skipped past, since a leg that skips
+its own tests looks like one that passes them. A run told which platform it
+is meant to be errors if it finds itself anywhere else.
 """
 from __future__ import annotations
 
@@ -70,10 +61,8 @@ def describe() -> str:
             f"python {platform.python_version()})")
 
 
-#: What each platform is expected to be able to do. Absence of a capability is
-#: a property of the platform, recorded here, rather than a reason to skip:
-#: a test asserts the capability where it should exist and asserts the
-#: documented substitute where it should not.
+#: What each platform can do. A missing capability is recorded here, not a
+#: reason to skip: tests assert presence and absence alike.
 CAPABILITIES = {
     LINUX:   {"wrapper_script": True,  "peak_memory": True,  "posix_paths": True},
     MACOS:   {"wrapper_script": True,  "peak_memory": True,  "posix_paths": True},

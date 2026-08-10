@@ -1,10 +1,6 @@
-"""Locating the gwyconvert binary.
-
-gwyddionpy looks for the converter in a fixed order: an explicitly passed
-path, then the GWYDDIONPY_CONVERT environment variable, then PATH, then the
-binary bundled in the installed gwyddionpy-converter package. These tests
-drive that order through the real environment and the really installed
-package, so what they exercise is what a user's machine does.
+"""Locating the gwyconvert binary, in order: an explicit path,
+GWYDDIONPY_CONVERT, PATH, then the installed converter package. Driven
+through the real environment rather than a stand-in.
 """
 import os
 
@@ -44,7 +40,7 @@ def test_environment_variable_is_used(monkeypatch):
 
 def test_environment_variable_pointing_nowhere(monkeypatch):
     """A configured but wrong path is reported against the variable that set
-    it, rather than silently falling back to another converter."""
+    it, rather than falling back to another converter."""
     monkeypatch.setenv(ENV_VAR, "/no/such/gwyconvert")
     with pytest.raises(gwyddionpy.ConverterNotFoundError, match=ENV_VAR):
         find_converter()

@@ -11,7 +11,7 @@
 # and downloaded by gwyddionpy's _fetch_converter.py. Renaming ASSET_NAME
 # means updating _fetch_converter._asset_name() to match.
 #
-# The wheels do NOT go through this script: cibw-before-all-linux.sh calls
+# The wheels do not go through this script. cibw-before-all-linux.sh calls
 # bundle-linux.sh directly, straight into the wheel's package data.
 set -euo pipefail
 

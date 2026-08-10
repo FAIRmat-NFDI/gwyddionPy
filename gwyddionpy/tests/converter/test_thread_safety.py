@@ -1,12 +1,7 @@
-"""Reading files from several threads of one process.
+"""Reading files from several threads of one process, the harder case since
+threads share the environment, working directory and module state.
 
-Separate processes are covered elsewhere; this is the harder case, because
-threads share everything the module has — the environment the converter is
-launched with, the working directory, whatever the package keeps at module
-level. A conversion goes out to a subprocess through a scratch directory, so
-the question is whether two of those running at once can reach each other's.
-
-The comparison is always against a reading done alone: concurrency may change
+Every result is compared with a reading done alone: concurrency may change
 when an answer arrives, never what it is.
 """
 from concurrent import futures
@@ -65,8 +60,8 @@ def test_one_file_read_by_many_threads_at_once(specimens, read_alone):
 
 
 def test_different_files_read_at_once_do_not_cross(specimens, read_alone):
-    """The failure a shared scratch path would cause: one measurement's data
-    turning up in another's result."""
+    """The failure a shared scratch path would cause is one measurement's
+    data turning up in another's result."""
     work = list(specimens) * 3
     with futures.ThreadPoolExecutor(max_workers=THREADS) as pool:
         results = list(pool.map(read, work))
@@ -77,9 +72,9 @@ def test_different_files_read_at_once_do_not_cross(specimens, read_alone):
 
 
 def test_threads_do_not_share_a_scratch_directory(specimens, monkeypatch):
-    """context part: each call makes its own scratch directory, which is what
-    keeps simultaneous conversions apart. Recorded here by noting the path
-    every call actually used."""
+    """Each call makes its own scratch directory, which is what keeps
+    simultaneous conversions apart. Checked by noting the path each call
+    used."""
     used = []
     real_parse = gwyddionpy.parse_gwy
 
@@ -118,7 +113,7 @@ def test_failures_in_some_threads_do_not_disturb_the_others(specimens,
 def test_overruns_in_some_threads_do_not_disturb_the_others(specimens,
                                                             read_alone):
     """A conversion stopped part-way in one thread must not take another's
-    with it — they share nothing but the module."""
+    with it. They share nothing but the module."""
     good = specimens[0]
 
     def work(index):
@@ -146,7 +141,7 @@ def test_listing_formats_from_many_threads(specimens):
 
 
 def test_reading_native_gwy_files_in_parallel(tmp_path):
-    """The in-process path shares more than the subprocess one does: no
+    """The in-process path shares more than the subprocess one: no
     converter, no scratch directory, just gwyfile and the model."""
     from helpers.gwy_builder import make_gwy
 

@@ -1,27 +1,8 @@
-"""Reading a file must not depend on how the machine is configured.
-
-Gwyddion formats numeric metadata through the C library, so on a machine set
-up for German or French numbers the same measurement comes back with "0,881"
-where an English one gives "0.881". Anything downstream that reads those
-values as numbers then behaves differently depending on whose laptop it runs
-on, which is why the decimal separator is pinned rather than inherited.
-
-context part: this is the classic failure of C code that reaches for strtod
-where g_ascii_strtod is meant, and it is not hypothetical here — the metadata
-of the JPK measurements really does change with the locale, and the stored
-references had a comma baked into them until this was pinned.
-
-Each test states which locale it is running under and checks that the locale
-genuinely took effect, so a machine without the locale installed fails loudly
-instead of comparing the C locale against itself and passing.
-
-context part: the separator is pinned twice over, and the two are not
-interchangeable. converter_environment() sets LC_NUMERIC=C in the
-environment it hands the converter, which is a POSIX mechanism; gwyconvert
-also pins LC_NUMERIC in the process itself, which is what carries the
-guarantee on Windows, where the C runtime ignores the environment. These
-tests provoke the failure through the environment and so run only where that
-is meaningful.
+"""Reading a file must not depend on the machine's number formatting: a
+German-configured machine returns "0,881" where an English one gives
+"0.881", and the stored references had a comma baked in until this was
+pinned. Pinned twice — in the environment and inside gwyconvert — and only
+the second holds on Windows, so these environment-driven tests skip there.
 """
 import os
 import subprocess
@@ -34,21 +15,13 @@ from helpers import content as content_mod
 from helpers.requirements import require_specimen
 from helpers.specimens import IMAGE_SPECIMENS, SPECIMENS_BY_ID
 
-#: Whether a locale can be imposed on a child process through the
-#: environment at all. This is a POSIX mechanism: the Microsoft C runtime's
-#: setlocale(LC_ALL, "") reads the user's OS locale and ignores LC_ALL and
-#: LC_NUMERIC, so on Windows no environment this suite can construct changes
-#: how the converter formats numbers, and a test that set one would be
-#: comparing the default locale against itself.
-#:
-#: The guarantee itself still holds there, by a different route: gwyconvert
-#: pins LC_NUMERIC in the process on start-up, which works the same way on
-#: every platform. What cannot be demonstrated on Windows is this suite's
-#: way of provoking the failure, not the behaviour being relied on.
+#: Windows reads its locale from the operating system and ignores LC_ALL
+#: and LC_NUMERIC, so no environment set here could change the converter's
+#: number formatting. The guarantee still holds there through gwyconvert's
+#: own setlocale call; only this way of provoking the failure does not.
 LOCALE_IS_TAKEN_FROM_THE_ENVIRONMENT = os.name != "nt"
 
-#: Locales whose decimal separator is a comma. Several are listed because
-#: which ones exist varies between machines and CI images.
+#: Several, because which ones exist varies between machines and CI images.
 COMMA_LOCALE_CANDIDATES = (
     "de_DE.UTF-8", "de_DE.utf8", "fr_FR.UTF-8", "fr_FR.utf8",
     "es_ES.UTF-8", "it_IT.UTF-8", "pt_BR.UTF-8", "nl_NL.UTF-8",
@@ -59,12 +32,9 @@ JPK = "jpk/sample_0.jpk"
 
 
 def decimal_point_under(locale_name: str) -> str:
-    """What a child process actually uses as a decimal separator.
-
-    Asking the operating system rather than assuming: setting a locale that
-    is not installed silently falls back to C, and a test that compared the
-    C locale with itself would pass while proving nothing.
-    """
+    """What a child process really uses as its decimal separator. Asked
+    rather than assumed: an uninstalled locale silently falls back to C, and
+    comparing C with itself proves nothing."""
     result = subprocess.run(
         [sys.executable, "-c",
          "import locale; locale.setlocale(locale.LC_ALL, ''); "
@@ -93,17 +63,14 @@ def comma_locale():
         pytest.skip(
             "this platform does not take its locale from the environment, so "
             "the caller's number formatting cannot be varied from here. The "
-            "converter pins LC_NUMERIC in the process itself, which is what "
-            "holds on this platform; see gwyconvert.c."
+            "converter pins LC_NUMERIC in the process itself; see gwyconvert.c."
         )
     if COMMA_LOCALE is None:
         pytest.fail(
             "no comma-decimal locale is installed, so locale independence "
             "cannot be demonstrated on this machine. Install one, e.g. "
-            "`sudo locale-gen de_DE.UTF-8 && sudo update-locale`, or on a "
-            "Debian/Ubuntu CI image add `locales` and run "
-            "`locale-gen de_DE.UTF-8`. Candidates tried: "
-            + ", ".join(COMMA_LOCALE_CANDIDATES)
+            "`sudo locale-gen de_DE.UTF-8 && sudo update-locale`. "
+            "Candidates tried: " + ", ".join(COMMA_LOCALE_CANDIDATES)
         )
     return COMMA_LOCALE
 
@@ -116,8 +83,8 @@ def under_locale(monkeypatch, comma_locale):
 
 
 def test_the_chosen_locale_really_uses_commas(comma_locale):
-    """The control the other tests depend on: if this ever stops holding,
-    everything below would be comparing the C locale against itself."""
+    """The control the rest rest on: without it they would be comparing the
+    C locale with itself."""
     assert decimal_point_under(comma_locale) == ","
 
 
@@ -149,8 +116,8 @@ def test_content_is_the_same_under_a_comma_locale(specimen, under_locale,
 
 
 def test_numeric_metadata_keeps_a_dot_under_a_comma_locale(under_locale):
-    """The value that exposed the problem: a JPK duty cycle reported as
-    "0,881" cannot be read as a number by anything downstream."""
+    """The value that exposed the problem: a duty cycle of "0,881" cannot be
+    read as a number downstream."""
     specimen = SPECIMENS_BY_ID[JPK]
     require_specimen(specimen)
     data = gwyddionpy.load(specimen.path)
@@ -162,9 +129,8 @@ def test_numeric_metadata_keeps_a_dot_under_a_comma_locale(under_locale):
 
 
 def test_non_ascii_metadata_survives_the_pinned_locale(under_locale):
-    """context part: only numeric formatting is pinned. Pinning the whole
-    locale to C would put characters like µ and ° at risk, and the vendor
-    metadata is full of them."""
+    """Only numeric formatting is pinned; pinning the whole locale to C
+    would put the µ and ° in vendor metadata at risk."""
     specimen = SPECIMENS_BY_ID["jpk/sample_0.jpk-qi-image"]
     require_specimen(specimen)
     data = gwyddionpy.load(specimen.path)
@@ -175,8 +141,8 @@ def test_non_ascii_metadata_survives_the_pinned_locale(under_locale):
 
 
 def test_lc_all_does_not_override_the_pinned_decimal_separator(under_locale):
-    """LC_ALL outranks LC_NUMERIC in POSIX, so setting the one without
-    handling the other leaves the caller's locale still in charge."""
+    """LC_ALL outranks LC_NUMERIC, so setting one without handling the other
+    leaves the caller's locale in charge."""
     from gwyddionpy._run import converter_environment
 
     env = converter_environment()

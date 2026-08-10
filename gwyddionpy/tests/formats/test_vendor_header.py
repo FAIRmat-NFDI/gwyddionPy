@@ -1,19 +1,9 @@
-"""Checking the converter against the vendor's own header.
+"""Check the converter against the vendor's own text header, where a format
+has one. This is what keeps the references honest: captured from a
+conversion, they otherwise only show the converter agreeing with itself.
 
-Some formats write their scan geometry as plain text inside the file. Where
-that is the case the geometry can be read straight out of the raw bytes and
-compared with what gwyddionpy reports, which gives an account of the numbers
-that comes from the instrument rather than from a previous conversion.
-
-context part: the references are captured from a conversion, so on
-their own they establish only that the converter still agrees with itself. If
-a first capture had been wrong, every reference test would keep pinning the
-wrong values. These checks are what break that circle, and they are the reason
-the Bruker geometry can be trusted rather than merely repeated.
-
-warning: only Bruker Nanoscope has a readable header today. The values for
-JPK, WSxM, Igor and Nanonis rest on the captured conversion alone and still
-need review by someone who knows the instrument better.
+Only Bruker Nanoscope has a readable header today; the other vendors' values
+still need review by someone who knows the instrument.
 """
 import re
 
@@ -56,9 +46,9 @@ def test_geometry_matches_the_file_header(specimen):
     require_specimen(specimen)
     header_size, header_shape = HEADER_READERS[specimen.module](specimen.path)
 
-    # The registry records what was read out of the header by hand; checking
-    # it here means a typo in the registry shows up as a failure instead of
-    # quietly weakening the comparison below.
+    # The registry records what was read out of the header by hand. Checking
+    # it here turns a typo there into a failure, rather than a quietly
+    # weakened comparison below.
     assert header_size == pytest.approx(specimen.header_checks["xreal"], rel=1e-12)
     assert header_shape == tuple(specimen.header_checks["shape"])
 

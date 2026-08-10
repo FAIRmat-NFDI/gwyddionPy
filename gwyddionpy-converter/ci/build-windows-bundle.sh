@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Windows: install deps, build Gwyddion + gwyconvert, stage the bundle into
-# the wheel's package data. Runs in an MSYS2 MinGW64 shell (msys2/setup-msys2
-# provides it in CI).
+# Windows: install dependencies, build Gwyddion and gwyconvert, and stage
+# the bundle into the wheel's package data. Runs in an MSYS2 MinGW64 shell.
 #
-# Unlike Linux and macOS this is NOT a cibuildwheel `before-all`:
+# Unlike Linux and macOS this is not a cibuildwheel `before-all`.
 # cibuildwheel runs Windows commands under cmd, and threading a full MSYS2
-# login shell through that is needless quoting fragility. build-converter.yml
-# runs this script as its own msys2 step BEFORE cibuildwheel instead — the
-# two must stay in that order, and setup.py's _check_bundle_present() turns
-# a mistake into a loud failure rather than an empty wheel.
+# login shell through that is needless quoting fragility.
+# build-converter.yml runs this as its own step before cibuildwheel
+# instead. The two must stay in that order; setup.py's
+# _check_bundle_present() turns a mistake into a loud failure rather than
+# an empty wheel.
 #
-# Packages come from the MSYS2 mingw64 repo (mingw-w64-x86_64-gtk2 is GTK2
-# 2.24.x): https://packages.msys2.org/
+# Packages come from the MSYS2 mingw64 repository:
+# https://packages.msys2.org/
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "== Installing Gwyddion build dependencies (pacman) =="
-# The toolchain group also supplies binutils, hence objdump, which
-# bundle-windows.sh uses to walk PE import tables. python runs the
+# The toolchain group also supplies binutils, and so objdump, which
+# bundle-windows.sh uses to walk import tables. python runs the
 # format-count assertions in build-gwyddion.sh and bundle-windows.sh.
 pacman -S --noconfirm --needed \
   mingw-w64-x86_64-toolchain \

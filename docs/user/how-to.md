@@ -4,10 +4,10 @@ gwyddionpy is two pieces:
 
 - the **`gwyddionpy` Python package** — pure Python, Apache-2.0;
 - the **`gwyconvert` helper binary** — GPL-2.0-or-later, because it links
-  [Gwyddion](http://gwyddion.net); it does the actual format conversion.
+  [Gwyddion](http://gwyddion.net). It does the actual format conversion.
 
-The Python package never bundles the binary. You always install the two
-separately, and there are three ways to get the binary:
+The Python package never bundles the binary, so you always install the two
+separately. There are three ways to get the binary:
 
 1. **The companion wheel** — one `pip install`, nothing to build. Linux
    x86_64, macOS (Apple Silicon and Intel), Windows x86_64.
@@ -43,11 +43,11 @@ choice.
 
 ## Option 2 — a prebuilt binary from a GitHub Release (deprecated)
 
-> **Deprecated.** This route still works and is still tested, but it will be
-> removed in a future release. Option 1 is the supported way to get a
-> converter. If you are choosing now, choose option 1; if you already rely on
-> this, you have until the removal to move across, and the command prints a
-> notice saying so.
+> **Deprecated.** This route still works and is still tested, but it will
+> be removed in a future release. Option 1 is the supported way to get a
+> converter. If you are choosing now, choose option 1. If you already rely
+> on this, the command prints a notice and you have until the removal to
+> move across.
 
 Useful when you want the binary without a GPL package in your environment.
 
@@ -108,10 +108,11 @@ install the equivalents (Fedora: `gwyddion` + `gwyddion-devel`) and continue
 from step 2.
 
 To avoid distribution packages entirely, build Gwyddion itself from its
-official source tarball with `gwyddionpy-converter/ci/build-gwyddion.sh` —
-the same script this project's CI and release builds use. It takes
-`WORK_DIR`, `PREFIX` and `GWYCONVERT_OUT` from the environment and produces
-a `gwyconvert` linked against its own Gwyddion.
+official source tarball with
+[`gwyddionpy-converter/ci/build-gwyddion.sh`](../../gwyddionpy-converter/ci/build-gwyddion.sh),
+the same script this project's continuous integration and release builds
+use. It takes `WORK_DIR`, `PREFIX` and `GWYCONVERT_OUT` from the
+environment and produces a `gwyconvert` linked against its own Gwyddion.
 
 ## Verify
 
@@ -121,10 +122,10 @@ python3 -c "import gwyddionpy; print(len(gwyddionpy.list_formats()), 'formats')"
 
 Expect a number well over 100; ~170 is typical.
 
-**Zero is the failure mode to watch for.** A converter that cannot find
-Gwyddion's format plugins still starts and exits cleanly — it simply
-registers nothing. If you see zero after option 3, the `gwyddion` package
-from step 1 is the first thing to check.
+**Zero is the failure to watch for.** A converter that cannot find
+Gwyddion's format plugins still starts and exits cleanly; it simply
+registers nothing. If you see zero after option 3, check the `gwyddion`
+package from step 1 first.
 
 `ConverterNotFoundError` instead means no binary was found at all: check
 that `GWYDDIONPY_CONVERT` points at a real file, or that step 2 actually
@@ -135,6 +136,7 @@ Then try a real measurement file:
 ```bash
 python3 -c "import gwyddionpy; d = gwyddionpy.load('your_scan_file'); print(list(d.channels))"
 ```
+
 ## Using `gwyconvert` on its own
 
 The helper binary is a normal command-line program, so a shell script or a

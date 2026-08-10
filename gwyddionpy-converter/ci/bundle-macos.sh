@@ -4,36 +4,33 @@
 #
 # Inputs (all required, via environment):
 #   PREFIX            Gwyddion install prefix from build-gwyddion.sh
-#   BUILT_GWYCONVERT  path to the gwyconvert Mach-O just built against it
-#   BUNDLE_DIR        destination; ends up holding `gwyconvert` + `lib/`.
+#   BUILT_GWYCONVERT  path to the gwyconvert binary just built against it
+#   BUNDLE_DIR        destination; ends up holding `gwyconvert` and `lib/`.
 #                     gwyddionpy_converter.binary_path() expects that name.
 #
-# Not a mechanical translation of the Linux script: three things genuinely
+# Not a mechanical translation of the Linux script. Three things genuinely
 # differ, and getting any of them wrong yields a bundle that works on the
 # build machine and fails everywhere else.
 #
-# 1. `otool -L` lists DIRECT dependencies only, where `ldd` gives the full
-#    transitive closure — so this script walks the graph itself. A flat
-#    one-pass copy would miss every second-level library.
-# 2. There is no LD_LIBRARY_PATH escape hatch. System Integrity Protection
-#    strips DYLD_* variables when a protected binary (/bin/sh, which runs
-#    the wrapper, among them) spawns a child, so the Linux trick of
-#    exporting a library path cannot work. Every reference is rewritten to
-#    @loader_path instead — what `delocate` does, and more robust anyway.
+# 1. `otool -L` lists direct dependencies only, where `ldd` gives the full
+#    transitive closure, so this script walks the graph itself. A one-pass
+#    copy would miss every second-level library.
+# 2. There is no library-path escape hatch. System Integrity Protection
+#    (SIP) strips DYLD_* variables when a protected binary spawns a child,
+#    and /bin/sh, which runs the wrapper, is one. Every reference is
+#    rewritten to @loader_path instead, which is what `delocate` does.
 #    https://developer.apple.com/library/archive/documentation/Security/Conceptual/System_Integrity_Protection_Guide/RuntimeProtections/RuntimeProtections.html
-# 3. Editing a Mach-O invalidates its code signature, after which macOS
+# 3. Editing a binary invalidates its code signature, after which macOS
 #    refuses to load it — a hard failure on Apple Silicon. Every file
 #    rewritten here must be re-signed.
 #
-# Bundling policy mirrors Linux: ship everything EXCEPT the OS's own
-# libraries, which on macOS means anything under /usr/lib or
-# /System/Library — always present, version-matched to the host, and not
-# redistributable. Homebrew's trees (/opt/homebrew on arm64, /usr/local on
-# x86_64) are what must travel.
+# Bundling policy mirrors Linux: ship everything except the operating
+# system's own libraries, which on macOS means anything under /usr/lib or
+# /System/Library. Homebrew's trees are what must travel.
 set -euo pipefail
 
 : "${PREFIX:?PREFIX must be set (Gwyddion install prefix)}"
-: "${BUILT_GWYCONVERT:?BUILT_GWYCONVERT must be set (path to the built Mach-O)}"
+: "${BUILT_GWYCONVERT:?BUILT_GWYCONVERT must be set (path to the built binary)}"
 : "${BUNDLE_DIR:?BUNDLE_DIR must be set (bundle destination directory)}"
 
 LIB_DIR="$BUNDLE_DIR/lib"
@@ -42,9 +39,9 @@ echo "== Laying out the bundle at $BUNDLE_DIR =="
 rm -rf "$BUNDLE_DIR"
 mkdir -p "$LIB_DIR"
 cp "$BUILT_GWYCONVERT" "$LIB_DIR/gwyconvert.real"
-# Gwyddion's dlopen()'d format plugins, same reasoning as Linux: they are
-# found via a path compiled into libgwyddion at ITS build time, which points
-# at a temporary directory that will not exist on a user's machine.
+# Gwyddion's loadable format plugins, for the same reason as on Linux: they
+# are found through a path compiled into libgwyddion at its own build time,
+# pointing at a temporary directory no user will have.
 cp -R "$PREFIX/lib/gwyddion" "$LIB_DIR/gwyddion"
 
 # System libraries: present on every macOS, never bundled.
@@ -55,9 +52,9 @@ is_system_lib() {
   esac
 }
 
-# Direct dependencies of a Mach-O file, as absolute paths. Skips the first
-# otool line (the filename), the file's own LC_ID_DYLIB entry, and anything
-# already expressed relative to the loader.
+# Direct dependencies of one binary, as absolute paths. Skips otool's first
+# line (the filename), the file's own identity entry, and anything already
+# expressed relative to the loader.
 direct_deps() {
   otool -L "$1" | tail -n +2 | awk '{print $1}' | while read -r dep; do
     case "$dep" in
@@ -69,9 +66,9 @@ direct_deps() {
 }
 
 echo "== Resolving the transitive dependency closure =="
-# Worklist over every Mach-O shipped: the executable plus every dlopen()'d
+# Worklist over every binary shipped: the executable plus every loadable
 # module. The modules matter for the same reason as on Linux — their own
-# dependencies (libxml2 and co., for the anasys_xml/spml/zyvex parsers)
+# dependencies, such as libxml2 for the anasys_xml, spml and zyvex parsers,
 # appear in no other file's dependency list.
 WORK="$(mktemp)"; SEEN="$(mktemp)"; trap 'rm -f "$WORK" "$SEEN"' EXIT
 {
@@ -102,7 +99,7 @@ done
 echo "bundled $(find "$LIB_DIR" -maxdepth 1 -name '*.dylib' | wc -l | tr -d ' ') libraries"
 
 echo "== Rewriting install names to @loader_path =="
-# For a Mach-O at <dir>, the bundle's lib/ is reached by going up as many
+# For a binary at <dir>, the bundle's lib/ is reached by going up as many
 # levels as <dir> is below it. lib/gwyconvert.real -> "." ;
 # lib/gwyddion/modules/file/x.so -> "../../..".
 rel_to_lib() {
@@ -119,8 +116,8 @@ while read -r macho; do
   prefix="@loader_path"
   [ "$rel" != "." ] && prefix="@loader_path/$rel"
 
-  # A dylib's own install name is what dependents record; point it at the
-  # bundle so anything linking it later resolves inside the bundle too.
+  # A library's own install name is what dependents record, so point it at
+  # the bundle and anything linking it later resolves inside the bundle too.
   case "$macho" in
     *.dylib) install_name_tool -id "$prefix/$(basename "$macho")" "$macho" 2>/dev/null || true ;;
   esac
@@ -128,38 +125,35 @@ while read -r macho; do
   direct_deps "$macho" | while read -r dep; do
     is_system_lib "$dep" && continue
     base="$(basename "$dep")"
-    # Only rewrite references to things we actually bundled; leave anything
-    # else pointing where it did, so a missing rewrite fails loudly at load
-    # time rather than silently resolving to a host copy.
+    # Rewrite only references to things actually bundled. Anything else
+    # keeps pointing where it did, so a missing rewrite fails loudly at
+    # load time rather than quietly resolving to a host copy.
     [ -f "$LIB_DIR/$base" ] || continue
     install_name_tool -change "$dep" "$prefix/$base" "$macho" 2>/dev/null || true
   done
 
   # Re-sign: the edits above invalidate the existing signature, and macOS
-  # refuses to load an invalidly-signed Mach-O (hard failure on arm64).
-  # An ad-hoc signature (`-`) suffices for a binary distributed outside the
-  # App Store.
+  # refuses to load an invalidly signed binary — a hard failure on arm64.
+  # An ad-hoc signature (`-`) is enough outside the App Store.
   codesign --force --sign - --timestamp=none "$macho" 2>/dev/null || true
 done
 
 cat > "$BUNDLE_DIR/gwyconvert" <<'WRAPPER'
 #!/bin/sh
 # Sets GWYDDION_LIBDIR so gwyconvert.real finds the bundled format modules
-# instead of the (nonexistent) path compiled in at CI build time.
+# instead of the nonexistent path compiled in at build time.
 #
-# Deliberately does NOT export DYLD_LIBRARY_PATH: macOS SIP strips DYLD_*
-# variables when a protected binary spawns a child, so it would be silently
-# dropped. Library resolution is handled entirely by the @loader_path
-# install names bundle-macos.sh rewrote instead.
+# Deliberately does not export DYLD_LIBRARY_PATH: System Integrity
+# Protection strips DYLD_* variables when a protected binary spawns a child,
+# so it would be dropped. The @loader_path install names that
+# bundle-macos.sh rewrote handle library resolution instead.
 here="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 export GWYDDION_LIBDIR="$here/lib"
-# Keep stderr for real diagnostics. GTK otherwise tries to load the
-# accessibility modules (gail, atk-bridge) and GdkPixbuf looks for a loader
-# cache at the path baked in by the build container, which exists on no
-# user's machine — three warnings on every run, successful ones included,
-# ending in advice to run a command as root that would not help. None of it
-# is needed: gwyconvert draws nothing and the bundle ships no pixmap module.
-# Verified that clearing both leaves the format list and every conversion
+# Keep stderr for real diagnostics. Otherwise GTK loads its accessibility
+# modules and GdkPixbuf hunts for a loader cache at a path baked in by the
+# build container, warning on every run including successful ones. Neither
+# is needed: gwyconvert draws nothing and the bundle ships no pixmap
+# module. Clearing both leaves the format list and every conversion
 # unchanged.
 export GTK_MODULES=""
 export GDK_PIXBUF_MODULE_FILE=/dev/null
@@ -173,12 +167,12 @@ env -i "$BUNDLE_DIR/gwyconvert" --list-formats | python3 -c \
 
 echo "== Checking no bundled file still points outside the bundle =="
 # A surviving reference to /opt/homebrew, /usr/local or the build PREFIX
-# means the rewrite missed something — it would work here and fail on every
-# user's machine. Fail the build rather than ship it.
+# means the rewrite missed something. It would work here and fail on every
+# user's machine, so fail the build rather than ship it.
 #
-# Results go to a file, not a shell variable, deliberately: the `while`
-# below is the right-hand side of a pipe and so runs in a subshell, where an
-# assignment would be discarded and the check would always pass.
+# Results go to a file, not a shell variable: the `while` below is the
+# right-hand side of a pipe and runs in a subshell, where an assignment
+# would be discarded and the check would always pass.
 LEAKS="$(mktemp)"
 find "$LIB_DIR" -type f \( -name '*.dylib' -o -name '*.so' -o -name 'gwyconvert.real' \) |
 while read -r macho; do

@@ -1,12 +1,8 @@
-"""Awkward but entirely valid data taken through the exports.
+"""Awkward but entirely valid data taken through the exports: a single
+line, a single point, one pixel tall, entirely flat, or full of gaps where
+nothing was measured. None of it is malformed and all must survive.
 
-The measurements in tests/data are all well behaved. Real ones are not always
-so: a scan can be a single line, a single point, thousands of pixels wide and
-one tall, entirely flat, or full of gaps where nothing was measured. None of
-that is malformed, and all of it has to survive being exported.
-
-Built from constructed files rather than measurements, so these run without a
-converter and stay quick.
+Built from constructed files, so these need no converter.
 """
 import numpy as np
 import pytest
@@ -101,9 +97,9 @@ def test_extreme_magnitudes_are_not_rounded_away(tmp_path):
 
 
 def test_narrow_input_is_widened_to_double_precision(tmp_path):
-    """context part: the .gwy container stores doubles, so a float32 source
-    is widened on the way in and stays double thereafter. Pinned because a
-    caller checking dtype would otherwise be surprised by it."""
+    """The .gwy container stores doubles, so a float32 source is widened on
+    the way in and stays double. Pinned so a caller checking dtype is not
+    surprised."""
     values = np.arange(12, dtype="f4").reshape(3, 4)
     data = read_back(tmp_path, values)
 
@@ -138,9 +134,8 @@ def test_a_file_with_no_channels_still_exports(tmp_path):
 
 
 def test_channels_that_sanitize_alike_are_both_kept(tmp_path):
-    """context part: "/" is HDF5's path separator and becomes "_", which can
-    land two different channels on one key. That used to drop a channel from
-    the dict export without a word and abort the HDF5 export outright."""
+    """"/" is HDF5's path separator and becomes "_", which can land two
+    different channels on one key. Both must survive under distinct keys."""
     path = make_gwy(tmp_path / "clash.gwy", [
         {"name": "A/B", "data": np.ones((2, 2))},
         {"name": "A_B", "data": np.zeros((2, 2))},
@@ -174,11 +169,10 @@ def test_both_exports_choose_the_same_keys_for_clashing_names(tmp_path):
 
 @pytest.mark.parametrize("value", ["0", "1", "5", "A", "-", " ", "Å", "°", "µ"])
 def test_single_character_metadata_survives_a_gwy_round_trip(value, tmp_path):
-    """context part: the .gwy writer has to state that text is text. Left to
-    infer the type, it stores a one-character string as Gwyddion's char type,
-    which comes back as the character's numeric code — a recorded "0" became
-    48 — and a one-character non-ASCII value such as "Å" was written as two
-    bytes but read back as one, leaving the whole file unreadable.
+    """The .gwy writer has to state that text is text. Left to infer, it
+    stores a one-character string as Gwyddion's char type, which reads back
+    as the character's numeric code, and a non-ASCII one such as "Å" comes
+    back truncated and leaves the whole file unreadable.
     """
     path = make_gwy(tmp_path / "short.gwy",
                     [{"name": "Height", "data": np.zeros((2, 2)),
@@ -225,10 +219,9 @@ def test_unicode_names_and_metadata_survive(tmp_path):
 
 @pytest.mark.parametrize("raw", ["1_000", "１２", "0x10", "1,5", "true", "", "  "])
 def test_vendor_text_is_not_silently_turned_into_a_number(raw, tmp_path):
-    """context part: int()/float() accept more than an instrument ever writes
-    — "1_000" parses as 1000 through PEP 515 digit separators and "１２" as 12
-    through non-ASCII digits — which would replace the recorded text with a
-    different value."""
+    """int() and float() accept more than an instrument ever writes: "1_000"
+    parses as 1000 through digit separators and "１２" as 12 through
+    non-ASCII digits, either of which would rewrite the recorded value."""
     path = make_gwy(tmp_path / "meta.gwy",
                     [{"name": "Height", "data": np.zeros((2, 2)),
                       "meta": {"Label": raw}}])
@@ -240,8 +233,7 @@ def test_vendor_text_is_not_silently_turned_into_a_number(raw, tmp_path):
 @pytest.mark.parametrize("raw,expected", [("12", 12), ("-2.44", -2.44),
                                           ("1e5", 100000.0), (".5", 0.5)])
 def test_genuine_numbers_are_still_parsed(raw, expected, tmp_path):
-    """The counterpart: tightening the check must not stop real numbers from
-    being recognised."""
+    """The counterpart: real numbers must still be recognised."""
     path = make_gwy(tmp_path / "num.gwy",
                     [{"name": "Height", "data": np.zeros((2, 2)),
                       "meta": {"Value": raw}}])

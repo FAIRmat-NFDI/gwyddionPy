@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 """Capture the references that the format tests compare against.
 
-    python gwyddionpy/tests/make_reference.py                       # all files
-    python gwyddionpy/tests/make_reference.py jpk/sample_0.jpk       # one file
-    python gwyddionpy/tests/make_reference.py sample_0.jpk           # same, short
+    python gwyddionpy/tests/make_reference.py                  # all files
+    python gwyddionpy/tests/make_reference.py jpk/sample_0.jpk # one file
 
-Each reference is written beside the raw file it describes. Run this when a
-change in output is understood and intended, then read the resulting diff:
-that diff is what shows exactly which values moved and is the thing worth
-reviewing.
+Each is written beside the raw file it describes. Run only when a change in
+output is intended, then review the diff.
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# Run as a script rather than under pytest, so put tests/ on the path the way
-# the pythonpath setting does during a test run.
+# Run as a script rather than under pytest, so put tests/ on the path the
+# way pytest's pythonpath setting does during a test run.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import gwyddionpy  # noqa: E402

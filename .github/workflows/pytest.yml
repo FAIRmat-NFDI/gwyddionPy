@@ -7,12 +7,10 @@ on:
   #   branches: [main]
 
 jobs:
-  # Two independent jobs (no `needs:` between them) covering the two ways a
-  # developer can obtain gwyconvert. Both are kept: pytest-source-tarball
-  # exercises the recipe released artifacts are built from
-  # (gwyddionpy-converter/ci/build-gwyddion.sh), while pytest-system-package
-  # exercises the distro-package route contributors actually reach for
-  # locally, which nothing else would catch if it broke.
+  # Two independent jobs covering the two ways to obtain gwyconvert.
+  # pytest-source-tarball exercises the recipe released artifacts are built
+  # from; pytest-system-package exercises the distribution-package route
+  # contributors reach for locally, which nothing else would catch.
 
   pytest-system-package:
     name: pytest (system Gwyddion package)
@@ -25,22 +23,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # `gwyddion` itself is required, not just libgwyddion20-dev: Debian
-      # and Ubuntu ship the file-format module plugins (~170 .so files that
-      # gwyconvert dlopen()s at runtime) in the `gwyddion` binary package,
-      # while the -dev package carries only headers and link libraries.
-      # Omit it and gwyconvert builds, links and runs — reporting zero
-      # formats. Keep this list in sync with docs/user/how-to.md.
+      # `gwyddion` itself is required, not just libgwyddion20-dev. Debian
+      # and Ubuntu ship the file-format plugins that gwyconvert loads at
+      # run time in the `gwyddion` package, while the -dev package carries
+      # only headers and link libraries. Omit it and gwyconvert builds,
+      # links, runs and reports zero formats.
+      # Keep this list in step with docs/user/how-to.md.
       - name: Install Gwyddion (system package)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libgwyddion20-dev gwyddion libgtk2.0-dev libfftw3-dev pkg-config build-essential
 
-      # The locale tests prove the reader is independent of the machine's
-      # number formatting, and cannot do so unless a comma-decimal locale
-      # exists to compare against. The runner image ships only C and English
-      # ones, so generate one rather than let the tests skip themselves.
+      # The locale tests show the reader is independent of the machine's
+      # number formatting, and need a comma-decimal locale to compare
+      # against. The runner image ships only C and English ones, so one is
+      # generated here rather than letting the tests skip.
       - name: Generate a comma-decimal locale
         run: |
           sudo apt-get install -y locales
@@ -79,12 +77,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Build dependencies only — Gwyddion itself is built from its official
+      # Build dependencies only. Gwyddion itself is built from its official
       # source tarball by ci/build-gwyddion.sh, the same script
-      # build-converter.yml uses. Testing against that rather than the
-      # distro package means this job matches what actually ships, and does
-      # not depend on how a distribution happens to split its Gwyddion
-      # packages (the exact assumption the job above documents).
+      # build-converter.yml uses, so this job matches what actually ships
+      # and does not depend on how a distribution splits its packages.
       - name: Install build dependencies for Gwyddion
         run: |
           sudo apt-get update
@@ -125,18 +121,13 @@ jobs:
   # ---------------------------------------------------------------------
   # The converter this branch builds, on every platform it is built for.
   #
-  # These legs used to install gwyddionpy-converter from the index, which
-  # meant they tested the last *release*: a change to gwyconvert.c or to a
-  # build recipe could not be checked until after it had shipped, and four
-  # genuine bugs — macOS arm64 registering eight formats fewer than x86_64,
-  # unreadable non-ASCII paths on Windows, numbers coming back with commas
-  # there, and a GLib assertion on every run — reached users because nothing
-  # ever ran the suite against a converter built from the source under
-  # review. Building it here is what makes this a gate rather than a report
-  # on an artifact the change cannot affect.
+  # The wheels are built here rather than installed from the index. An
+  # installed one would be the last release, so a change to gwyconvert.c or
+  # to a build recipe could not be checked until after it had shipped.
+  # Building here makes this a gate on the change under review.
   #
   # The build is the one in build-converter.yml, called rather than copied,
-  # so there is a single recipe and releases and tests cannot diverge.
+  # so releases and tests cannot diverge.
   # ---------------------------------------------------------------------
   build-converter:
     name: Build the converter wheels
@@ -187,15 +178,13 @@ jobs:
           python-version: "3.12"
 
       # Installed into the environment setup-uv created and put on PATH, as
-      # the other jobs do. Not --system: that bypasses it for the
-      # interpreter the image happens to ship, which on Ubuntu is externally
-      # managed and refuses the install outright, and on macOS installs
-      # somewhere pytest is then not found.
+      # the other jobs do. Not --system, which would target the interpreter
+      # the image ships: on Ubuntu that is externally managed and refuses
+      # the install, and on macOS it lands somewhere pytest is not found.
       #
-      # Named by path rather than as a requirement: a test build carries the
-      # throwaway version 0.0.0, and naming the file is also what guarantees
-      # the wheel under test is the one just built and not one resolved from
-      # an index.
+      # Named by path rather than as a requirement, because a test build
+      # carries the throwaway version 0.0.0 and naming the file is what
+      # guarantees the wheel under test is the one just built.
       - name: Install gwyddionpy and the converter wheel built here
         shell: bash
         run: |

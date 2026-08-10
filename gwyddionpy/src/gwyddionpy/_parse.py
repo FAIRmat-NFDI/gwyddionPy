@@ -1,8 +1,8 @@
-"""Parsing a .gwy file (serialized GwyContainer) into the gwyddionpy model.
+"""Parse a .gwy file (a serialized GwyContainer) into the gwyddionpy model,
+using the pure-Python ``gwyfile`` package.
 
-Relies on the pure-Python ``gwyfile`` package. Container layout, as written
-by Gwyddion: ``/N/data`` (GwyDataField), ``/N/data/title`` (str),
-``/N/meta`` (string-valued GwyContainer), for channel numbers N.
+Layout per channel N: ``/N/data`` (GwyDataField), ``/N/data/title`` (str),
+``/N/meta`` (string-valued GwyContainer).
 """
 from __future__ import annotations
 
@@ -18,11 +18,9 @@ from ._model import Channel, GwyData
 
 _DATA_KEY = re.compile(r"^/(?P<num>\d+)/data$")
 
-#: Why a .gwy file that will not open usually will not open. gwyfile reports
-#: damage through whichever low-level failure the corruption happens to
-#: trigger, and "unpack requires a buffer of 4 bytes" tells the person holding
-#: the file nothing they can act on, so the plausible causes are spelled out
-#: alongside it.
+#: Why a .gwy file will not open. gwyfile reports damage as whichever
+#: low-level failure the corruption happens to trigger, and a message like
+#: "unpack requires a buffer of 4 bytes" is no help to the caller.
 _DAMAGE_CAUSES = (
     "the file is empty",
     "it was truncated before the end of its header",
@@ -75,17 +73,10 @@ def parse_gwy(path) -> GwyData:
     try:
         return _parse(path)
     except Exception as error:
-        # Everything from here to the finished GwyData is interpretation of
-        # bytes the caller did not write, and gwyfile signals damage in
-        # whatever way the corruption happens to break it: AssertionError
-        # (sometimes with no message at all), KeyError, AttributeError,
-        # ValueError, struct.error, UnicodeDecodeError. Truncating one small
-        # container at each of its 786 offsets produced four of those.
-        #
-        # Note that the whole read is wrapped, not just the initial load:
-        # gwyfile reshapes a channel's array lazily, when the attribute is
-        # first touched, so a corrupt shape surfaces well after the file has
-        # apparently been read successfully.
+        # gwyfile raises whatever the damage happens to break — AssertionError,
+        # ValueError, struct.error — so all of it becomes one typed error. The
+        # whole read is wrapped, not just the load, because gwyfile reshapes a
+        # channel lazily and a corrupt shape surfaces only on first access.
         raise UnsupportedFormatError(_damage_report(path, error)) from error
 
 

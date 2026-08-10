@@ -1,13 +1,8 @@
 """Tests for the machinery that captures and compares reference content.
 
-context part: the format tests report a failure only when the comparison
-helpers return a difference, so a fault in those helpers would not break any
-test — it would quietly make them pass. Neutering both of them to return "no
-differences" leaves the whole format suite green, which is why they are
-exercised directly here rather than only through the files they compare.
-
-Everything here runs on constructed channels, so it needs no converter and no
-measurement files.
+The format tests only fail when these helpers report a difference, so a
+fault in them would quietly make every one of them pass. Everything here
+runs on constructed channels, needing no converter or measurement file.
 """
 import json
 from types import SimpleNamespace
@@ -57,8 +52,7 @@ def test_difference_beyond_tolerance_is_reported():
 
 
 def test_tolerance_boundary_is_relative_not_absolute():
-    """The same relative drift is caught whatever the magnitude, which matters
-    because scan sizes are ~1e-5 and pixel values can be ~1e-9."""
+    """Matters because scan sizes are ~1e-5 and pixel values ~1e-9."""
     for magnitude in (1e-12, 1e-9, 1.0, 1e6):
         drifted = magnitude * 1.000001
         assert content_mod.float_diffs({"v": magnitude}, {"v": drifted}), (
@@ -118,8 +112,8 @@ def test_added_and_removed_metadata_keys_are_reported():
 
 
 def test_metadata_compares_as_text_not_as_numbers():
-    """Vendor values are strings; "1.0" and "1.00" are different readings of
-    the header even though they are the same number."""
+    """"1.0" and "1.00" are different readings of the header, even though
+    they are the same number."""
     assert len(content_mod.meta_diffs({"Scan Rate": "1.0"},
                                       {"Scan Rate": "1.00"})) == 1
 
@@ -203,8 +197,7 @@ def test_non_finite_pixels_survive_json():
 
 
 def test_metadata_values_are_never_treated_as_numbers():
-    """A vendor string that happens to read "NaN" stays that string, rather
-    than being decoded into a float on the way back in."""
+    """A vendor string reading "NaN" must not decode into a float."""
     channel = make_channel(meta={"Fit Status": "NaN", "Gain": "Infinity"})
     content = content_mod.extract_content(
         GwyData(channels={"Height": channel}, source_format="x")
@@ -222,7 +215,7 @@ def _round_trip(data, tmp_path):
     """Capture a reference the way make_reference.py does, then read it back."""
     path = tmp_path / "reference.json"
     content_mod.dump_reference(content_mod.extract_content(data), path)
-    # A stand-in for a Specimen: load_reference only needs somewhere to read from.
+    # Stands in for a Specimen: load_reference only needs a path to read.
     return content_mod.load_reference(SimpleNamespace(reference_path=path))
 
 

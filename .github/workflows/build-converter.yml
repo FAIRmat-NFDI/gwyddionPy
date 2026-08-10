@@ -2,16 +2,13 @@ name: Build and publish gwyconvert
 
 # Builds the gwyconvert artifacts. Two entry points:
 # - workflow_call — publish.yml calls this once per release, so both
-#   publish jobs share a single (slow) build. There is deliberately no
-#   `release:` trigger here; that would run the build twice and race the
-#   two `--clobber` uploads against each other.
-# - pull_request — same build without the release upload, so a broken
-#   recipe fails CI rather than surfacing at release time.
+#   publish jobs share one slow build. No `release:` trigger, deliberately:
+#   that would build twice and race the two `--clobber` uploads.
+# - pull_request — the same build without the upload.
 #
-# `tag` is an explicit input rather than github.event.release.tag_name:
-# a called workflow does not receive the caller's full event payload, so
-# the caller passes the tag down. It is empty on pull_request runs, which
-# is what the upload step gates on.
+# `tag` is an explicit input because a called workflow does not receive the
+# caller's event payload. It is empty on pull requests, which is what the
+# upload step gates on.
 # https://docs.github.com/actions/sharing-automations/reusing-workflows
 on:
   pull_request:
@@ -27,10 +24,9 @@ on:
         type: string
 
 jobs:
-  # Wheels: one py3-none wheel per platform, via setup.py + cibuildwheel.
-  # The separate `linux` job below produces the tarball that is attached to
-  # the GitHub Release and downloaded by gwyddionpy's _fetch_converter.py;
-  # the two paths are independent and both are still shipped.
+  # One py3-none wheel per platform, via setup.py and cibuildwheel. The
+  # `linux` job below separately produces the release tarball that
+  # _fetch_converter.py downloads; both paths still ship.
   wheels:
     name: Build wheel (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -45,11 +41,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # setuptools-scm cannot see .git from inside cibuildwheel's Linux
-      # container (root=".." resolves outside the copied project), so the
-      # version is always passed in explicitly. Release runs strip the "v"
-      # (v0.0.9 -> 0.0.9), matching publish.yml's lockstep pin; pull_request
-      # runs have no tag and build a throwaway 0.0.0 that is never published.
+      # setuptools-scm cannot see .git from inside the build container, so
+      # the version is passed in. Release runs strip the "v"; pull requests
+      # have no tag and build a throwaway 0.0.0 that is never published.
       - name: Set the wheel version
         shell: bash
         run: |
@@ -59,22 +53,17 @@ jobs:
           echo "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER=$VERSION" >> "$GITHUB_ENV"
 
       # Building Gwyddion from source takes about twenty minutes per
-      # platform, and pytest.yml now calls this workflow on every push so
-      # that its cross-platform legs test the converter in the branch rather
-      # than the last release. The key covers everything that decides what
-      # ends up in the wheel — the source, the build and bundling scripts,
-      # and the packaging — so a push that touches only tests or docs reuses
-      # the wheels instead of rebuilding them.
+      # platform, and pytest.yml calls this workflow on every push. The key
+      # covers everything that decides what ends up in the wheel, so a push
+      # touching only tests or docs reuses the wheels.
       #
       # Restored before the build steps rather than beside them, because on
       # Windows the costly part is staging the bundle under MSYS2, which
-      # happens before cibuildwheel ever runs. Everything that builds is
-      # therefore gated on the miss, not just the packaging.
+      # happens before cibuildwheel runs.
       #
-      # Never on a release: `tag` sets the version compiled into the wheel,
-      # which the key does not cover, so a tagged build must not be handed a
-      # wheel built as 0.0.0. Restricting the cache to untagged runs is what
-      # keeps published artifacts always freshly built.
+      # Never on a release. `tag` sets the version compiled into the wheel
+      # and the key does not cover it, so a tagged build must not be handed
+      # a wheel built as 0.0.0.
       - name: Reuse the wheels when nothing that builds them has changed
         id: wheel-cache
         if: inputs.tag == ''
@@ -92,13 +81,12 @@ jobs:
 
       # Windows only: the Gwyddion build needs a real MSYS2 MinGW64 shell,
       # which cibuildwheel's cmd-based hooks cannot provide. The bundle is
-      # therefore staged in its own step BEFORE cibuildwheel; setup.py's
-      # _check_bundle_present() turns any ordering mistake into a loud
-      # failure instead of an empty wheel. See ci/build-windows-bundle.sh.
+      # staged in its own step before cibuildwheel, and setup.py's
+      # _check_bundle_present() turns an ordering mistake into a loud
+      # failure rather than an empty wheel.
       #
-      # Changing this ordering, or the two steps' names, means revisiting
-      # gwyddionpy-converter/pyproject.toml [tool.cibuildwheel.windows],
-      # which documents the same split from the other side.
+      # Changing this ordering, or these step names, means revisiting
+      # gwyddionpy-converter/pyproject.toml [tool.cibuildwheel.windows].
       - name: Set up MSYS2 (Windows)
         if: runner.os == 'Windows' && steps.wheel-cache.outputs.cache-hit != 'true'
         uses: msys2/setup-msys2@v2
@@ -112,11 +100,10 @@ jobs:
         run: ./gwyddionpy-converter/ci/build-windows-bundle.sh
 
       # macOS: this value reaches the wheel's platform tag through
-      # sysconfig.get_platform(). Pinned to the runner's own OS line, not
-      # lower: the bundle links Homebrew bottles built for this macOS
-      # version, so an older tag would promise compatibility the payload
-      # cannot deliver. Raise it in step with the `macos-*` runner images
-      # in the matrix above.
+      # sysconfig.get_platform(). Pinned to the runner's own version, not
+      # lower, because the bundle links Homebrew bottles built for it and
+      # an older tag would promise compatibility the payload cannot
+      # deliver. Raise it in step with the `macos-*` images above.
       - name: Pin the macOS deployment target
         if: runner.os == 'macOS'
         shell: bash
@@ -142,23 +129,20 @@ jobs:
   linux:
     name: Build gwyconvert (linux-x86_64)
     runs-on: ubuntu-latest
-    # Rocky Linux 8, not the runner's Ubuntu: glibc is forward-compatible
-    # only, so building against glibc 2.28 is what lets the bundle run on
-    # RHEL/Rocky/Alma 8+, Debian 10+ and Ubuntu 18.10+. The oldest hosted
-    # runner image (ubuntu-22.04, glibc 2.35) would already exclude RHEL 9
-    # and Debian bookworm. 2.28 is also the manylinux_2_28 floor the wheels
-    # use, so both artifacts have the same reach.
-    # https://peps.python.org/pep-0600/
+    # Rocky Linux 8, not the runner's Ubuntu. The C library is
+    # forward-compatible only, so building against glibc 2.28 is what lets
+    # the bundle run on RHEL/Rocky/Alma 8+, Debian 10+ and Ubuntu 18.10+.
+    # The oldest hosted runner image would already exclude RHEL 9 and
+    # Debian bookworm. 2.28 is also the floor the wheels use, so both
+    # artifacts have the same reach. https://peps.python.org/pep-0600/
     #
-    # Not the official manylinux image: it ships no GTK2/GLib/FFTW/Pango,
-    # which would mean building that entire stack from source. EL8 packages
-    # all of them.
+    # Not the official manylinux image, which ships no GTK2, GLib, FFTW or
+    # Pango and would mean building that whole stack from source too.
     container: rockylinux:8
     steps:
-      # Runs inside the container, so every dependency — including the gh
-      # CLI used by the upload step — comes from dnf rather than the runner
-      # image. Repo layout: fftw-devel is in PowerTools (CRB), patchelf in
-      # EPEL, gh in GitHub's own rpm repo.
+      # Runs inside the container, so every dependency comes from dnf and
+      # not the runner image. fftw-devel is in PowerTools, patchelf in EPEL,
+      # gh in GitHub's own repository.
       - name: Install build dependencies
         run: |
           dnf -y install dnf-plugins-core
@@ -172,33 +156,29 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      # Builds Gwyddion from its official source tarball rather than a
-      # distro package (see ci/build-gwyddion.sh for why). gcc-toolset-12
-      # is required, not optional: EL8's default GCC 8.5 rejects Gwyddion
-      # 2.71's OpenMP shared() clauses ("predetermined 'shared'"), while
-      # the toolset compiler still targets glibc 2.28.
+      # gcc-toolset-12 is required: the image's default GCC 8.5 rejects
+      # Gwyddion 2.71's OpenMP shared() clauses, and the toolset compiler
+      # still targets the same C library baseline.
       - name: Build, bundle, and package gwyconvert
         # $GITHUB_WORKSPACE, not ${{ github.workspace }}: in container jobs
-        # the expression resolves to the runner's HOST path rather than the
-        # container mount, while the env var inside the step is always
-        # container-correct. https://github.com/actions/runner/issues/2058
+        # the expression gives the host path, the env var the container one.
+        # https://github.com/actions/runner/issues/2058
         run: |
           source /opt/rh/gcc-toolset-12/enable
           export OUT_DIR="$GITHUB_WORKSPACE/dist-converter"
           gwyddionpy-converter/ci/build-linux.sh
 
       - name: Upload to the release
-        # Gated on `inputs.tag`, not github.event_name: a called workflow
-        # sees the CALLER's event name ('release'), never 'workflow_call',
-        # so event_name cannot distinguish the two entry points. The tag
-        # input can — publish.yml always sets it, pull_request never does.
+        # Gated on `inputs.tag`, not event_name: a called workflow sees the
+        # caller's event name, so it cannot tell the two entry points apart.
+        # publish.yml always sets the tag; a pull request never does.
         if: inputs.tag != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Container jobs check the repo out under a different UID than git
-          # runs as, which trips git's ownership guard as soon as `gh`
-          # shells out to it. https://nvd.nist.gov/vuln/detail/CVE-2022-24765
+          # Container jobs check out under a different user than git runs
+          # as, tripping git's ownership guard once `gh` shells out to it.
+          # https://nvd.nist.gov/vuln/detail/CVE-2022-24765
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           gh release upload "${{ inputs.tag }}" \
             dist-converter/gwyconvert-linux-x86_64.tar.gz \

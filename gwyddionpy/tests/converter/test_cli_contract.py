@@ -1,23 +1,10 @@
-"""The gwyconvert command-line contract, exercised on the binary itself.
+"""The gwyconvert command-line contract, run against the binary itself.
 
-Everywhere else the converter is reached through gwyddionpy. Here it is run
-directly, because the agreement between the two is what the Python side is
-built on: an exit code that says which kind of thing went wrong, a result on
-stdout that can be parsed without filtering, and diagnostics kept out of it.
-
-    gwyconvert INPUT OUTPUT.gwy   ->  0 on success, 1 if the file cannot be
-                                      read or the output cannot be written
+    gwyconvert INPUT OUTPUT.gwy   ->  0 ok, 1 cannot read or cannot write
     gwyconvert --list-formats     ->  0, the format list on stdout
     anything else                 ->  2, usage on stderr
 
-warning: the binary has two sources of noise on stderr that are artefacts
-rather than diagnostics, and both are dealt with before these tests see them.
-GTK and GdkPixbuf warn on every call in a bare environment, which
-gwyddionpy suppresses through converter_environment() — the environment these
-tests use. Gwyddion itself warns about duplicate module registrations while
-loading modules, which no environment variable reaches; gwyconvert silences
-that for the duration of registration. So what is asserted here is the
-contract as callers of this package actually receive it.
+Full description: docs/user/gwyconvert-cli.md
 """
 import json
 import os
@@ -70,8 +57,8 @@ def test_listing_formats_reports_success(converter):
 def test_an_unreadable_file_is_distinguished_from_a_bad_invocation(
     converter, tmp_path
 ):
-    """The distinction the Python side depends on: 1 means the converter ran
-    and could not read the file, 2 means it was called wrongly."""
+    """The distinction the Python side depends on: 1 means the file could
+    not be read, 2 means the converter was called wrongly."""
     unreadable = tmp_path / "notes.spm"
     unreadable.write_text("this is not a measurement")
     assert run(converter, unreadable,
@@ -125,9 +112,8 @@ def test_the_format_list_is_parsable_straight_off_stdout(converter):
 
 
 def test_a_successful_run_says_nothing_on_stderr(converter, specimen, tmp_path):
-    """context part: this is the assertion the GTK/GdkPixbuf noise used to
-    break. Those warnings appeared on every run and were quoted verbatim in
-    this package's error messages."""
+    """The GTK and GdkPixbuf warnings used to break this, and were quoted
+    verbatim in this package's own error messages."""
     result = run(converter, specimen.path, tmp_path / "out.gwy")
     assert result.stderr == "", f"unexpected output on stderr: {result.stderr!r}"
 
@@ -164,8 +150,7 @@ def test_a_failure_names_the_file_it_could_not_write(converter, specimen,
 ])
 def test_awkward_directory_names_are_handled(converter, specimen, tmp_path,
                                              directory):
-    """The wrapper script passes arguments on to the real binary, so quoting
-    mistakes there would surface exactly here."""
+    """A quoting mistake in the wrapper script would surface exactly here."""
     target = tmp_path / directory
     target.mkdir()
     source = target / specimen.path.name
@@ -177,11 +162,8 @@ def test_awkward_directory_names_are_handled(converter, specimen, tmp_path,
 
 
 def test_relative_and_absolute_paths_agree(converter, specimen, tmp_path):
-    """context part: the two outputs are compared as data rather than as
-    bytes. Gwyddion records the input path it was given inside the container,
-    so an absolute run and a relative one differ in length by exactly the
-    difference between the two path strings while describing identical
-    measurements."""
+    """Compared as data, not bytes: Gwyddion records the input path inside
+    the container, so the two outputs differ in length."""
     import numpy as np
 
     import gwyddionpy
@@ -206,9 +188,8 @@ def test_relative_and_absolute_paths_agree(converter, specimen, tmp_path):
 
 
 def test_an_existing_output_file_is_replaced(converter, specimen, tmp_path):
-    """context part: the converter overwrites without asking, which is what
-    gwyddionpy relies on when it converts into a fresh temporary directory.
-    Pinned so a future prompt-or-refuse behaviour would be noticed."""
+    """gwyddionpy relies on the overwrite when converting into a scratch
+    directory, so a future prompt-or-refuse behaviour must be noticed."""
     output = tmp_path / "out.gwy"
     output.write_bytes(b"stale contents that must not survive")
 
@@ -243,9 +224,8 @@ def test_the_input_file_is_left_untouched(converter, specimen, tmp_path):
 def test_the_supplied_environment_is_what_keeps_stderr_clean(converter,
                                                              specimen,
                                                              tmp_path):
-    """context part: without the suppression the binary is noisy in a bare
-    environment. Kept as a test so the two halves cannot drift apart — if a
-    future bundle stops needing it, this is what says so."""
+    """Kept as a test so the suppression and the bundle cannot drift apart,
+    and so a bundle that stops needing it says so here."""
     bare = {k: v for k, v in os.environ.items()
             if k not in ("GTK_MODULES", "GDK_PIXBUF_MODULE_FILE")}
     noisy = run(converter, specimen.path, tmp_path / "a.gwy", env=bare)

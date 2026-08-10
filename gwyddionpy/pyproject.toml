@@ -35,20 +35,11 @@ dependencies = [
 gwyddionpy-fetch-converter = "gwyddionpy._fetch_converter:_main"
 
 [project.optional-dependencies]
-# The GPL-2.0-or-later converter wheel is an *extra*, never a hard
-# dependency, for two reasons:
-#   1. License firewall. A plain `pip install gwyddionpy` must stay 100%
-#      Apache-2.0 for consumers who cannot take GPL artifacts; requesting
-#      `gwyddionpy[converter]` makes pulling one an explicit choice.
-#   2. Coverage. The converter ships wheels for Linux x86_64, macOS
-#      arm64/x86_64 and Windows x86_64, and no sdist — so as a hard
-#      dependency it would break `pip install gwyddionpy` outright on any
-#      other platform (Linux ARM, musl). As an extra, those users still get
-#      gwyddionpy and can supply gwyconvert through _run.py's other
-#      discovery paths: GWYDDIONPY_CONVERT, PATH, or a self-built binary.
+# The GPL converter is an extra, never a hard dependency: a plain install
+# stays Apache-2.0, and the converter has wheels for four platforms and no
+# source distribution, so requiring it would break pip anywhere else.
 #
-# publish.yml rewrites the line below at release time to pin the exact
-# converter version. Rewording it breaks that step (loudly, by design).
+# publish.yml rewrites the line below to pin the converter version.
 converter = ["gwyddionpy-converter"]
 hdf5 = ["h5py>=3.0"]
 test = ["pytest>=7", "h5py>=3.0", "hypothesis>=6.0"]
@@ -63,10 +54,8 @@ dev = [
 where = ["src"]
 
 [tool.uv]
-# gwyddionpy and gwyddionpy-converter are published to TestPyPI so far,
-# while numpy/gwyfile/platformdirs live on real PyPI: index-url is searched
-# first and extra-index-url covers the rest. Drop both when this package
-# moves to production PyPI (gwyddionpy-converter/pyproject.toml too).
+# Both packages are on TestPyPI so far; their dependencies are on real
+# PyPI. Drop both lines at production PyPI (also in the converter package).
 index-url = "https://test.pypi.org/simple"
 extra-index-url = ["https://pypi.org/simple"]
 
@@ -110,8 +99,7 @@ disable_error_code = "import, annotation-unchecked"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Makes tests/helpers/ importable from every test group without sys.path
-# juggling in conftest (pytest's own ini option, >=7.0).
+# Makes tests/helpers/ importable everywhere, with no sys.path juggling.
 pythonpath = ["tests"]
 markers = [
     "corpus: tests needing full-size raw files fetched from the corpus host",

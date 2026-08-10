@@ -1,9 +1,8 @@
-"""Running the converter, and the cases where it is deliberately not run.
+"""Running the converter, and the cases where it is deliberately not run:
+a native .gwy must never reach it.
 
-Native .gwy input is read directly and must never reach the converter; every
-other format goes through it. The failure paths point the environment
-variable at a path that does not exist, which is the one way to make an
-installed converter unreachable without touching the installation.
+The failure paths point GWYDDIONPY_CONVERT at a nonexistent file, the one
+way to make an installed converter unreachable without uninstalling it.
 """
 import numpy as np
 import pytest
@@ -43,9 +42,9 @@ def test_nonexistent_file_raises():
 
 
 def test_list_formats_reports_a_real_registry():
-    """A converter linked against an empty or stubbed module registry would
-    still exit cleanly and return a well-formed empty list, so check that the
-    formats are actually there and that each entry is complete."""
+    """A converter with an empty module registry still exits cleanly and
+    returns a well-formed empty list, so check the formats are really there
+    and each entry is complete."""
     formats = gwyddionpy.list_formats()
 
     # The count drifts with the Gwyddion release the converter was built

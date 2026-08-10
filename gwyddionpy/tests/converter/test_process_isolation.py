@@ -1,11 +1,8 @@
-"""Several processes reading files at the same time.
+"""Several processes reading files at the same time, as a shared analysis
+machine or a parallel test runner does.
 
-A shared analysis machine runs more than one job at once, and a parallel test
-runner starts several interpreters against the same installation. Each of
-them converts through a subprocess and a scratch directory, so the question
-is whether those interfere: one job's scratch space colliding with another's,
-or two conversions of the same measurement disagreeing.
-
+Each converts through its own scratch directory, so the question is whether
+those collide, or two conversions of one measurement disagree.
 """
 
 import json
@@ -64,8 +61,8 @@ def specimens():
 
 
 def test_concurrent_readings_of_one_file_all_agree(specimens):
-    """The same measurement read by several processes at once must come back
-    the same every time."""
+    """One measurement read by several processes at once must come back the
+    same every time."""
     relpath = specimens[0].relpath
     with futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
         outcomes = list(pool.map(read_in_a_separate_process,
@@ -80,7 +77,7 @@ def test_concurrent_readings_of_one_file_all_agree(specimens):
 
 def test_concurrent_readings_of_different_files_do_not_cross(specimens):
     """Running together must not let one measurement's data reach another's
-    result — the failure a shared scratch path would produce."""
+    result, which is what a shared scratch path would cause."""
     order = [s.relpath for s in specimens] * 3
     with futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
         outcomes = list(pool.map(read_in_a_separate_process, order))
@@ -140,9 +137,9 @@ def test_concurrent_readings_leave_no_scratch_directories(specimens):
 
 
 def test_each_process_gets_its_own_scratch_directory(specimens):
-    """context part: the scratch directory is created with a unique name per
-    call, which is what keeps simultaneous conversions apart. Checked by
-    having several processes report the path they used."""
+    """Each call gets a uniquely named scratch directory, which is what
+    keeps simultaneous conversions apart. Checked by having several
+    processes report the path they used."""
     script = (
         "import sys, tempfile, pathlib\n"
         f"sys.path.insert(0, {str(TESTS_DIR)!r})\n"

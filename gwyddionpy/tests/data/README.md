@@ -1,11 +1,13 @@
 # Test data — provenance and licenses
 
-Raw measurement files, grouped by vendor, each with its reference
-(`<file>.json`) beside it. Both are committed, so a checkout can run the
-format tests without fetching anything.
+Raw measurement files grouped by vendor, each with its reference
+(`<file>.json`) beside it. Both are committed, so a fresh checkout can run
+the format tests without fetching anything.
 
-Adding a file: drop it into the vendor directory, add an entry to
-`helpers/specimens.py` with its SHA-256, capture the reference with
+This is the test suite's only data source.
+
+To add a file: drop it into the vendor directory, add an entry to
+`helpers/specimens.py` with its SHA-256 checksum, capture the reference with
 `python gwyddionpy/tests/make_reference.py <vendor>/<file>`, and record its
 provenance below.
 
@@ -13,7 +15,7 @@ provenance below.
 |------|--------------------------|--------|---------|
 | `bruker_nanoscope/VGEP-15m-.0_00000.spm` | Bruker Nanoscope / `nanoscope` | own measurement (recovered from branch `FileParserInPython`) | project-internal |
 | `jpk/sample_0.jpk` | JPK / `jpkscan` | github.com/AFM-SPM/AFMReader `tests/resources` | GPL-3.0 (repo) |
-| `jpk/sample_0.jpk-qi-image` | JPK QI / `jpkscan` | github.com/AFM-SPM/AFMReader | GPL-3.0 (repo) |
+| `jpk/sample_0.jpk-qi-image` | JPK quantitative imaging / `jpkscan` | github.com/AFM-SPM/AFMReader | GPL-3.0 (repo) |
 | `wsxm/sample_0.stp` | WSxM / `wsxmfile` | github.com/AFM-SPM/AFMReader | GPL-3.0 (repo) |
 | `wsxm/sample_0.top` | WSxM / `wsxmfile` | github.com/AFM-SPM/AFMReader | GPL-3.0 (repo) |
 | `igor_asylum/sample_0.ibw` | Igor/Asylum / `igorfile` | github.com/AFM-SPM/AFMReader | GPL-3.0 (repo) |

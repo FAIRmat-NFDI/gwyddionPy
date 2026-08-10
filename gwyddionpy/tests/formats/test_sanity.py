@@ -1,10 +1,6 @@
-"""Broad checks that hold for every registered file, whatever its vendor.
-
-These assertions are true of any correct reading, so a newly added file is
-covered the moment it enters the registry — before anyone has captured a
-reference for it. Everything is driven from the registry and the paths under
-tests/data/, so adding a vendor, a format version or a whole new directory
-costs an entry rather than a test.
+"""Broad checks true of any correct reading, so a newly added file is
+covered the moment it enters the registry, before anyone captures a
+reference for it. Adding a vendor costs an entry rather than a test.
 """
 import pytest
 
@@ -31,9 +27,8 @@ def test_format_detected(specimen):
 def test_channels_carry_data(specimen):
     """Channels are non-empty and physically dimensioned.
 
-    context part: no assumption is made about dimensionality here — some
-    measurements are recorded as a single line rather than an image — so this
-    checks only that a channel carries values and a positive extent.
+    Nothing is assumed about shape, since some measurements are a single
+    line rather than an image. Only values and a positive extent are checked.
     """
     require_specimen(specimen)
     data = gwyddionpy.load(specimen.path)

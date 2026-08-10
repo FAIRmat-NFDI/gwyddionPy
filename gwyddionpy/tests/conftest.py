@@ -1,14 +1,9 @@
-"""Fixtures shared across the suite.
+"""Fixtures shared across the suite, which needs the gwyconvert from the
+installed converter package.
 
-Directory layout:
-  unit/       parsing, model and export behaviour on purpose-built inputs
-  converter/  locating and running the gwyconvert binary
-  formats/    reading the real vendor files under data/
-  helpers/    registry, reference schema and fixture builders
-  data/       raw measurement files and their references, by vendor
-
-Every test expects a working gwyconvert, which comes from the
-gwyddionpy-converter package installed alongside gwyddionpy.
+  unit/  built inputs   converter/  finding and running the binary
+  data/  vendor files   formats/    reading those files
+                        helpers/    registry, schema, fixture builders
 """
 import numpy as np
 import pytest
@@ -40,11 +35,8 @@ def declared_platform(config):
 def pytest_collection_modifyitems(config, items):
     """Leave the cross-platform tests out unless a platform was declared.
 
-    They assert things that only mean something when the platform is known
-    and controlled — which binary shape is installed, how a path is spelled,
-    which system calls exist. In CI each leg declares itself and they run. On
-    a developer's machine there is nothing to check that the rest of the suite
-    does not already cover, so they stay out of the way.
+    They only mean something on a known, controlled platform. Each CI leg
+    declares itself, so they run there.
     """
     if declared_platform(config) is not None:
         return
@@ -60,11 +52,8 @@ def pytest_collection_modifyitems(config, items):
 def pytest_configure(config):
     """Stop immediately if this run is not the platform it claims to be.
 
-    A cross-platform matrix is only worth having if each leg really is the
-    platform it says. An image that changed, a job that fell back to the
-    default runner, a `runs-on` typo — all of them produce a green run that
-    tested the wrong thing, and none of them is visible in the output. The
-    declaration is checked once, here, so the failure is unmissable.
+    A changed image or a `runs-on` typo produces a green run that tested the
+    wrong system, and nothing in the output would show it.
     """
     expected = declared_platform(config)
     if expected is None:
@@ -82,11 +71,8 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def required_platform(pytestconfig):
-    """The platform this run declared, however it was declared.
-
-    Both the command-line option and the environment variable end up here, so
-    a test never has to know which was used.
-    """
+    """The platform this run declared, by either route, so a test never has
+    to know whether the option or the environment variable was used."""
     return declared_platform(pytestconfig)
 
 

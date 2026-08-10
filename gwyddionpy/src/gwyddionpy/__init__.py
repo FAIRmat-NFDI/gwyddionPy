@@ -1,10 +1,8 @@
-"""gwyddionpy — read any Gwyddion-supported SPM raw file into NumPy.
+"""Read any scanning probe microscopy (SPM) raw file that Gwyddion supports.
 
 Pipeline: raw file -> gwyconvert subprocess -> .gwy -> gwyfile -> GwyData.
-Native .gwy inputs skip the converter and are parsed directly.
-
-The public surface is everything in ``__all__``; names prefixed with an
-underscore are internal and may change without notice.
+A .gwy input skips the converter. Everything in ``__all__`` is public;
+underscore-prefixed names are internal. Gwyddion: http://gwyddion.net
 """
 from __future__ import annotations
 
@@ -48,12 +46,11 @@ __all__ = [
 def load(
     path, *, converter: Optional[str] = None, timeout: Optional[float] = None
 ) -> GwyData:
-    """Load a raw SPM file of any Gwyddion-supported format.
+    """Load a raw file of any Gwyddion-supported format.
 
-    ``converter`` is an explicit path to gwyconvert; when omitted, it is
-    discovered by ``_run.find_converter()``. A .gwy input is read directly
-    and needs no converter at all. ``timeout`` caps how long the converter
-    may run, in seconds; the default is ``gwyddionpy._run.DEFAULT_TIMEOUT``.
+    ``converter`` is a path to gwyconvert, otherwise discovered by
+    ``_run.find_converter()``; a .gwy input needs none. ``timeout`` caps the
+    converter's run time, defaulting to ``_run.DEFAULT_TIMEOUT``.
     """
     path = Path(path)
     if not path.is_file():
@@ -62,8 +59,7 @@ def load(
     if path.suffix.lower() == ".gwy":
         return parse_gwy(path)
 
-    # The temporary directory is removed on the way out whether the
-    # conversion succeeds, fails or times out.
+    # Removed on the way out, whether the conversion succeeds or not.
     with tempfile.TemporaryDirectory(prefix="gwyddionpy-") as tmpdir:
         converted = Path(tmpdir, "converted.gwy")
         module = run_converter(path, converted, converter=converter,

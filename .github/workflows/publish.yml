@@ -23,10 +23,9 @@ jobs:
 
   build-python-wheel:
     name: Build gwyddionpy package
-    # More than ordering: the lockstep pin below makes a released
-    # gwyddionpy hard-require the converter from this same tag, so building
-    # it while the converter build is broken would ship a package whose
-    # `[converter]` extra can never resolve.
+    # More than ordering: the pin below makes a released gwyddionpy require
+    # the converter from this tag, so building it while the converter build
+    # is broken would ship an extra that can never resolve.
     needs: build-converter
     runs-on: ubuntu-latest
     env:
@@ -34,12 +33,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # setuptools-scm derives the version from git tags, so both flags
-          # are required. fetch-depth alone is not enough: actions/checkout
-          # unshallows history but does not fetch tags unless asked. Without
-          # the tags `git describe` produces a dev version carrying a local
-          # segment (0.0.14.post1.dev0+g...), which PyPI rejects outright
-          # ("local versions are not allowed").
+          # Both flags are required: actions/checkout unshallows history but
+          # does not fetch tags unless asked, and without tags
+          # setuptools-scm produces a local version PyPI rejects.
           # https://peps.python.org/pep-0440/#local-version-identifiers
           fetch-depth: 0
           fetch-tags: true
@@ -49,21 +45,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Lockstep versioning: both packages take their version from this git
-      # tag and are published by this run, so the released gwyddionpy must
-      # require exactly the converter from the same tag.
+      # Lockstep versioning: both packages take their version from this tag,
+      # so the released gwyddionpy must require exactly the converter from
+      # it. Applied here rather than committed, because the version is
+      # dynamic and a checkout must keep resolving the unpinned requirement.
       #
-      # Applied here rather than committed to pyproject.toml, for two
-      # reasons: the version is dynamic, so it cannot be written literally;
-      # and a checkout/editable install must keep resolving the UNPINNED
-      # requirement, since its dev version corresponds to no published
-      # converter and an `==` pin on it could never be satisfied.
-      #
-      # The regex below must keep matching gwyddionpy/pyproject.toml's
-      # `converter = ["gwyddionpy-converter"]` line — reword that line and
-      # this step fails loudly (by design, see the `count != 1` check).
-      # Tags are "v"-prefixed, versions are not; _fetch_converter._release_tag()
-      # performs the same conversion in the other direction.
+      # The regex must keep matching gwyddionpy/pyproject.toml's
+      # `converter = ["gwyddionpy-converter"]` line; the `count != 1` check
+      # below fails loudly if that line is reworded.
       - name: Pin gwyddionpy-converter to this exact release
         run: |
           VERSION="${TAG#v}"
@@ -93,12 +82,10 @@ jobs:
           print(f"pinned gwyddionpy-converter=={version}")
           PY
 
-      # The pin above rewrites pyproject.toml in place, which leaves the
-      # working tree dirty — and setuptools-scm treats a dirty tree as "not
-      # a clean release" even when sitting exactly on the tag, producing a
-      # version with a local segment that PyPI rejects. Pretending the
-      # version sidesteps git state entirely, as the converter build already
-      # does with SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER.
+      # The pin above leaves the working tree dirty, and setuptools-scm
+      # treats that as "not a clean release" even when sitting on the tag,
+      # producing a local version PyPI rejects. Pretending the version
+      # sidesteps git state, as the converter build already does.
       # https://setuptools-scm.readthedocs.io/en/latest/overrides/
       - name: Build package
         env:
@@ -136,16 +123,13 @@ jobs:
   publish-python-wheel:
     # TODO: Use PyPI in production
     name: Upload gwyddionpy to TestPyPI
-    # Ordering is load-bearing: gwyddionpy publishes AFTER the converter,
-    # never in parallel. Its lockstep pin hard-requires
-    # `gwyddionpy-converter==<this tag>`, so a converter upload that fails
-    # while this one succeeds would leave a published `[converter]` extra
-    # that can never resolve — unfixable, since PyPI forbids re-uploading a
-    # version. Depending on publish-converter-wheel skips this job instead.
+    # Ordering is load-bearing: gwyddionpy publishes after the converter,
+    # never in parallel. Its pin hard-requires the converter from this tag,
+    # so a converter upload that failed while this one succeeded would ship
+    # an extra that can never resolve, and PyPI forbids re-uploading.
     #
-    # The reverse failure is harmless: a converter nothing references yet
-    # just sits unused. Recovery is a plain re-run — both publish steps set
-    # `skip-existing: true`, so only the failed upload retries.
+    # The reverse failure is harmless. Recovery is a re-run: both publish
+    # steps set `skip-existing: true`, so only the failed upload retries.
     needs: [build-python-wheel, publish-converter-wheel]
     runs-on: ubuntu-latest
     environment:

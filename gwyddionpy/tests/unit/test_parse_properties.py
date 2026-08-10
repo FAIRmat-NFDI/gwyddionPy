@@ -1,24 +1,9 @@
-"""Properties the .gwy reader must hold for inputs nobody thought to write.
+"""Properties the .gwy reader must hold for generated inputs: arbitrary
+bytes, cuts at many offsets, single-byte edits.
 
-The damaged files elsewhere in the suite are ones a person chose: empty,
-truncated at the header, body overwritten. Those cover the failures somebody
-already imagined. These generate inputs instead — arbitrary bytes, cuts at
-every offset, single-byte edits — and assert the properties that must hold
-whatever comes in.
-
-Two families, and they are different in kind:
-
-  rejection   anything that is not a readable container must come back as a
-              typed error. Not a crash, not a hang, and not a silent success
-              that yields data invented from noise.
-  fidelity    anything that *is* a valid container must survive being read:
-              names, shapes, units and metadata come back as they went in.
-
-context part: generation is derandomized, so a run here is reproducible from
-the source alone and a failure someone reports can be reproduced exactly.
-Hypothesis still shrinks a failing input to its simplest form before showing
-it, which is most of the value — the smallest broken file is usually the one
-that explains the bug.
+*Rejection* — anything unreadable comes back as a typed error, never a
+crash, a hang or invented data. *Fidelity* — anything valid survives being
+read unchanged. Generation is derandomized, so failures reproduce.
 """
 from pathlib import Path
 
@@ -30,9 +15,8 @@ from hypothesis import strategies as st
 import gwyddionpy
 from helpers.gwy_builder import make_gwy
 
-# Reading writes and parses a real file each time, which is far slower than
-# hypothesis expects of a test body, so the per-example deadline is lifted and
-# the example count kept deliberately modest.
+# Each example writes and parses a real file, far slower than hypothesis
+# expects, so the deadline is lifted and the example count kept modest.
 PROPERTY_SETTINGS = settings(
     deadline=None,
     derandomize=True,
@@ -42,9 +26,8 @@ PROPERTY_SETTINGS = settings(
 
 CHANNEL_NAMES = st.text(min_size=1, max_size=24).filter(
     lambda s: s.strip() != "" and "\x00" not in s)
-# NUL is excluded deliberately: the container stores strings NUL-terminated,
-# so a value containing one cannot be represented at all. See
-# test_a_nul_in_metadata_makes_an_unreadable_file for what happens if it is.
+# The NUL character (a zero byte) is excluded: the container terminates
+# strings with it, so a value holding one cannot be represented.
 META_TEXT = st.text(max_size=40).filter(lambda s: "\x00" not in s)
 
 
@@ -72,15 +55,14 @@ def test_arbitrary_bytes_are_rejected_not_misread(payload, tmp_path):
         gwyddionpy.load(path)
 
 
-#: Why two of the offsets below never return. gwyfile reads an object array's
-#: item count as an unbounded uint32 straight from the buffer, so a count that
-#: corruption has made enormous sends it round a loop up to 2**32 times over an
-#: exhausted buffer. Upstream defect, recorded rather than worked around.
+#: Why two of the offsets below never return: gwyfile reads an object
+#: array's item count without bounds-checking it, so a corrupted count sends
+#: it round a loop up to 2**32 times over an exhausted buffer.
 HANG_REASON = ("gwyfile loops on a corrupt object-array count and never "
-               "returns; upstream defect, see §2.15 of the test plan")
+               "returns; defect in the gwyfile package, to be reported "
+               "upstream at https://github.com/tuxu/gwyfile/issues")
 
-#: Offsets to cut a container at. Sampled rather than exhaustive because
-#: each one is read in a process of its own — see the test below for why.
+#: Sampled rather than exhaustive, because each runs in its own process.
 TRUNCATION_OFFSETS = [
     0, 4, 8, 21, 34, 47, 62, 77, 91, 105,
     pytest.param(106, marks=pytest.mark.xfail(raises=TimeoutError, strict=True,
@@ -107,10 +89,8 @@ except BaseException as error:
 def read_out_of_process(path, timeout=6):
     """Read a file in a process of its own and report what happened.
 
-    Out of process because some damaged inputs never return, and no
-    in-process limit stops them: the loop sits below a C-level call chain, so
-    neither a signal alarm nor Ctrl-C interrupts it. Killing the process is
-    the only way out, which means the reader has to be somewhere killable.
+    Out of process because some damaged inputs never return, and neither a
+    signal alarm nor Ctrl-C interrupts the loop. Killing is the only way out.
     """
     import subprocess
     import sys
@@ -131,13 +111,8 @@ def read_out_of_process(path, timeout=6):
 def test_a_container_cut_short_is_rejected_or_read_but_never_hangs(
     cut, valid_container, tmp_path
 ):
-    """Cut a valid container at a given offset and read what is left.
-
-    A file copied while still being written, or a transfer that stopped, looks
-    exactly like this. Two outcomes are acceptable — rejected as a typed
-    error, or read successfully — and two are not: an exception the caller
-    cannot catch, or never returning at all.
-    """
+    """A file copied while still being written looks like this. Rejected or
+    read are both fine; an uncatchable exception or a hang are not."""
     path = tmp_path / "cut.gwy"
     path.write_bytes(valid_container[:cut])
 
@@ -150,17 +125,9 @@ def test_a_container_cut_short_is_rejected_or_read_but_never_hangs(
 def test_a_single_altered_byte_never_escapes_the_error_type(
     position, replacement, valid_container, tmp_path
 ):
-    """One changed byte either still reads, or fails as a typed error.
-
-    What it must never do is raise something the caller cannot catch. Byte 194
-    set to zero used to produce a bare `ValueError: cannot reshape array of
-    size 64 into shape (0,8)` — raised when the channel's array was first
-    touched, long after the file appeared to have been read.
-
-    Read out of process for the same reason as the truncation test: a changed
-    byte can land in an item count and send the reader into the unbounded loop
-    described there.
-    """
+    """One changed byte must never raise something the caller cannot catch.
+    Read out of process because it can also land in an item count and
+    trigger the unbounded loop described above."""
     corrupted = bytearray(valid_container)
     corrupted[position] = replacement
     path = tmp_path / "input.gwy"
@@ -176,8 +143,8 @@ def test_a_single_altered_byte_never_escapes_the_error_type(
 @PROPERTY_SETTINGS
 def test_noise_appended_to_a_valid_container(payload, valid_container,
                                              tmp_path):
-    """Trailing rubbish, as a truncated download followed by other data or a
-    concatenation mistake would leave."""
+    """Trailing rubbish, as a truncated download or a concatenation mistake
+    would leave."""
     path = tmp_path / "input.gwy"
     path.write_bytes(valid_container + payload)
 
@@ -206,8 +173,8 @@ def test_any_channel_name_and_shape_survives(name, rows, cols, tmp_path):
 @given(key=CHANNEL_NAMES, value=META_TEXT)
 @PROPERTY_SETTINGS
 def test_any_metadata_text_survives_unchanged(key, value, tmp_path):
-    """Vendor metadata is text and must come back as the same text — no
-    trimming, no reinterpretation, whatever characters it holds."""
+    """Vendor metadata is text and must come back as the same text: no
+    trimming, no reinterpretation."""
     path = make_gwy(tmp_path / "m.gwy",
                     [{"name": "Height", "data": np.zeros((2, 2)),
                       "meta": {key: value}}])
@@ -240,15 +207,9 @@ def test_channel_order_follows_the_file_however_many_there_are(count, tmp_path):
 
 
 def test_a_nul_in_metadata_makes_an_unreadable_file(tmp_path):
-    """A metadata value cannot contain a NUL, and saying so is better than
-    finding out later.
-
-    warning: this records a real defect rather than approving of it. The
-    container stores strings NUL-terminated, so a NUL inside one ends the
-    field early and corrupts everything after it — the writer produces a file
-    that this package itself then refuses to read. It should reject such a
-    value when writing instead of emitting a broken file.
-    """
+    """Records a known defect rather than approving of it: a NUL ends the
+    field early, so the writer produces a file this package then refuses to
+    read. Writing should reject the value instead."""
     path = make_gwy(tmp_path / "nul.gwy",
                     [{"name": "Height", "data": np.zeros((2, 2)),
                       "meta": {"Comment": "before\x00after"}}])

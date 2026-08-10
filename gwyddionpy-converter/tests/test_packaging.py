@@ -1,16 +1,10 @@
 """The packaging layer that hands gwyddionpy a converter to run.
 
-`binary_path()` is the last step of gwyddionpy's search for a converter and
-the only one that matters once the wheel is installed, which is now the only
-supported way to get one. Everything it promises is checked here, against the
-really installed package rather than a stand-in.
+`binary_path()` is the last step of the converter search and the only one
+that matters once the wheel is installed, so everything it promises is
+checked here against the really installed package.
 
-warning: `setup.py` in this package still returns a hardcoded
-`manylinux_2_28_x86_64` wheel tag. Deliberately not pinned by a test: the
-branch that adds macOS and Windows builds replaces it with a tag resolved
-from the build environment, and a test written against the hardcoded value
-would have to be rewritten immediately and would meanwhile record a wheel tag
-that is wrong on three of the four platforms being built.
+Not covered yet: `setup.py`'s `platform_tag()`.
 """
 import os
 import stat
@@ -48,8 +42,8 @@ def test_the_binary_is_executable(binary):
 
 
 def test_the_binary_lives_inside_the_installed_package(binary):
-    """It ships as package data, so it has to be under the package rather
-    than somewhere on the machine that happens to have a converter."""
+    """It ships as package data, so it must be under the package rather than
+    somewhere else on the machine that happens to have a converter."""
     package_root = Path(gwyddionpy_converter.__file__).parent
     assert package_root in binary.parents
 
@@ -73,10 +67,9 @@ def test_the_binary_actually_runs(binary):
 
 
 def test_a_missing_bundle_is_reported_clearly(monkeypatch, tmp_path):
-    """The failure a wheel built for the wrong platform would produce. It has
-    to name the problem: gwyddionpy treats this as "try the next place to
-    look", so a confusing message here surfaces later as a converter that
-    simply cannot be found."""
+    """What a wheel built for the wrong platform produces. It must name the
+    problem: gwyddionpy reads it as "try the next place to look", so an
+    unclear message resurfaces later as a converter that cannot be found."""
     monkeypatch.setattr(gwyddionpy_converter, "_BIN_DIR", tmp_path / "bin")
 
     with pytest.raises(FileNotFoundError) as raised:
@@ -90,10 +83,8 @@ def test_a_missing_bundle_is_reported_clearly(monkeypatch, tmp_path):
 def test_gwyddionpy_finds_this_binary_when_nothing_else_is_set(monkeypatch,
                                                                tmp_path,
                                                                binary):
-    """context part: the two packages are released separately, so this is the
-    seam between them. gwyddionpy falls back to the installed wheel once the
-    explicit path, the environment variable and PATH have all come up empty.
-    """
+    """The seam between the two packages: gwyddionpy falls back to the
+    installed wheel once every other candidate has come up empty."""
     run = pytest.importorskip("gwyddionpy._run")
 
     monkeypatch.delenv(run.ENV_VAR, raising=False)
@@ -105,8 +96,8 @@ def test_gwyddionpy_finds_this_binary_when_nothing_else_is_set(monkeypatch,
 
 
 def test_the_package_declares_its_licence():
-    """The wheel carries GPL-licensed Gwyddion libraries; keeping that stated
-    is what allows gwyddionpy itself to stay Apache-2.0."""
+    """The wheel carries GPL-licensed Gwyddion libraries. Saying so is what
+    lets gwyddionpy itself stay Apache-2.0."""
     from importlib import metadata
 
     try:
@@ -120,18 +111,15 @@ def test_the_package_declares_its_licence():
     assert "GPL" in declared.upper(), f"no GPL statement in: {declared[:200]}"
 
 
-#: What a shared library is called in the bundle, which differs by platform:
-#: Linux versions the file name (libgwyddion2.so.0) where macOS does not
-#: (libgwyddion2.0.dylib). Matching only one of them would let the check pass
-#: vacuously on the other, which is exactly what it exists to prevent.
+#: What a shared library is called in the bundle. Linux puts the version in
+#: the file name (libgwyddion2.so.0) and macOS does not
+#: (libgwyddion2.0.dylib), so both spellings are matched.
 LIBRARY_PATTERNS = ("lib/*.so", "lib/*.so.*", "lib/*.dylib")
 
 
 def test_the_bundle_carries_its_own_libraries(binary):
-    """context part: the bundle ships Gwyddion and its dependencies beside
-    the binary, which is what lets it run on a machine with no Gwyddion
-    installed. If that directory vanished, the wheel would work only where
-    Gwyddion happened to be present already."""
+    """The bundle ships Gwyddion and its dependencies beside the binary,
+    which is what lets it run on a machine with no Gwyddion installed."""
     if binary.read_bytes()[:2] != b"#!":
         pytest.skip("no wrapper script on this platform")
 
@@ -144,8 +132,7 @@ def test_the_bundle_carries_its_own_libraries(binary):
 
 
 def test_python_version_independence():
-    """The wheel is tagged py3-none-<platform>: the payload is run as a
-    subprocess and depends on no Python ABI, so the interpreter reading it
-    here is irrelevant to whether it works."""
+    """Tagged py3-none-<platform>: the payload runs as a subprocess and
+    depends on no Python application binary interface (ABI)."""
     assert sys.version_info >= (3, 9)
     assert gwyddionpy_converter.binary_path().is_file()

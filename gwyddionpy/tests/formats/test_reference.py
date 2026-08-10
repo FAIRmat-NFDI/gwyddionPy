@@ -1,21 +1,8 @@
-"""Field-by-field comparison of each measurement file against its reference.
+"""Compare each measurement against the JSON reference beside it, one
+element at a time, so a failure names both the element and the file.
 
-Every raw file in tests/data/ has a JSON reference beside it recording what
-reading it produces. These tests read the file again and compare the result
-one data element at a time, so a failure says which element changed and for
-which file — test_units[jpk/sample_0.jpk] rather than a single assertion that
-stops at the first difference.
-
-Files are opened one at a time: the fixture below is parametrized at module
-scope, so pytest runs every test for one file and releases it before opening
-the next. Peak memory is therefore the size of the largest file rather than
-the total of all of them, which is what keeps the suite affordable as more
-measurements are added — a single high-resolution scan can run to hundreds of
-megabytes once its channels are expanded to float64.
-
-References are captured with make_reference.py and reviewed before being
-committed; regenerating one to make a failing test pass is how the suite stops
-testing anything.
+References come from make_reference.py and are reviewed before committing.
+Regenerating one to make a test pass is how the suite stops testing.
 """
 import numpy as np
 import pytest
@@ -36,10 +23,9 @@ _OPEN = []
 def reading(request):
     """One file's reference and a fresh reading of it.
 
-    Module scope with parameters is what produces the grouping: pytest runs
-    all the tests below for a single file, tears this fixture down, and only
-    then moves to the next. Nothing caches the result, so the data becomes
-    collectable as soon as the file's tests are done.
+    Module scope with parameters groups the run: pytest finishes every test
+    for one file before opening the next, so peak memory stays at the
+    largest file rather than the total.
     """
     specimen = request.param
     require_reference(specimen)
@@ -55,10 +41,8 @@ def reading(request):
 def paired_channels(reference, data):
     """Yield (name, reference channel, read channel) for channels in both.
 
-    Names appearing on only one side are left to test_channel_names, so a
-    renamed channel produces one clear failure instead of the same news
-    repeated by every element test. Files that hold no image channels yield
-    nothing here; their content is pinned by the two file-level tests.
+    Names on only one side are left to test_channel_names, so a renamed
+    channel fails once rather than in every test below.
     """
     for name, expected in reference["channels"].items():
         if name in data.channels:
@@ -73,8 +57,8 @@ def test_every_specimen_has_a_reference():
 
 
 def test_only_one_file_is_held_open(reading):
-    """Guards the property the fixture exists for: if someone reintroduces
-    caching, or widens the fixture scope, this is what notices."""
+    """Guards what the fixture exists for. Reintroducing caching, or
+    widening the fixture scope, fails here."""
     assert _OPEN == [reading[0].relpath]
 
 
@@ -91,11 +75,7 @@ def test_channel_names(reading):
 
 
 def test_channel_arrays(reading):
-    """Each channel holds a real array of the expected dimensions and type.
-
-    The values themselves are checked by test_pixel_values; this is about the
-    shape of the container — dimensions, element count and dtype.
-    """
+    """Shape, element count and dtype. The values are test_pixel_values."""
     _, reference, data = reading
     diffs = []
     for name, expected, actual in paired_channels(reference, data):
@@ -156,13 +136,9 @@ def test_pixel_values(reading):
 
 
 def test_metadata(reading):
-    """Vendor metadata, compared exactly.
-
-    context part: metadata is the element most likely to move legitimately
-    between Gwyddion releases, since a new release can add header keys. It is
-    kept as its own test so that such a change can be handled here without
-    loosening any of the numeric comparisons above.
-    """
+    """Vendor metadata, compared exactly. Its own test because a Gwyddion
+    release can legitimately add header keys, and that must be handleable
+    without loosening the numeric comparisons above."""
     _, reference, data = reading
     diffs = []
     for name, expected, actual in paired_channels(reference, data):

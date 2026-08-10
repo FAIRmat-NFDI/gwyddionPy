@@ -1,10 +1,8 @@
-"""Checking that a test has the raw file it needs before it runs.
+"""Check that a test has the raw file it needs before it runs.
 
-The files live in tests/data/ and are committed with the tests, so this is a
-check rather than a fetch: nothing is downloaded and no test reaches outside
-the repository. A missing or altered file is a failure, never a skip — these
-tests exist to read real vendor files, so a run that passes without them would
-be reporting nothing.
+The files are committed, so this checks rather than fetches. A missing or
+altered file fails and never skips: a run that passed without the real
+vendor files would report nothing.
 """
 import hashlib
 from pathlib import Path

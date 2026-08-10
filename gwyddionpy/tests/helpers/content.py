@@ -1,12 +1,8 @@
-"""What "the content of a converted file" means, and how two of them compare.
+"""What "the content of a converted file" means, and how two compare.
 
-The reference for each raw file is a JSON document listing the fields below.
-JSON rather than a stored .gwy because it is readable in review and diffs
-meaningfully when a value moves, and because it does not carry the incidental
-binary differences that two Gwyddion releases produce for identical data.
-
-The writer (make_reference.py) and the readers (the format tests) both go through
-this module, so the schema has exactly one definition.
+JSON rather than a stored .gwy, so a reference reads in review and diffs
+meaningfully. make_reference.py and the format tests both go through here,
+so the schema has one definition.
 """
 from __future__ import annotations
 
@@ -18,19 +14,16 @@ import numpy as np
 
 SCHEMA_VERSION = 1
 
-#: Relative tolerance for float comparisons. Any real change in parsing — a
-#: wrong scale factor, a shifted offset — is orders of magnitude larger than
-#: this, while last-bit differences between compilers, libc versions and
-#: Gwyddion releases fall below it and are not defects.
+#: Relative tolerance for floats. A real parsing change is orders of
+#: magnitude larger; last-bit build differences fall below it.
 RTOL = 1e-9
 
 _NONFINITE_TAGS = ("NaN", "Infinity", "-Infinity")
 
 
 def _encode_float(value) -> object:
-    """NaN and infinities are not valid JSON, and masked or saturated pixels
-    do occur, so tag them as strings. Numeric fields only — metadata values
-    are vendor strings and are never passed through here."""
+    """Tag NaN and the infinities as strings, since JSON has no literal for
+    them. Numeric fields only: metadata stays vendor text."""
     value = float(value)
     if math.isnan(value):
         return "NaN"
@@ -46,9 +39,8 @@ def _decode_float(value) -> float:
 def pixel_positions(shape) -> List[tuple]:
     """Fixed positions to record for a given image shape.
 
-    Corners catch row/column ordering and off-by-one errors; the interior
-    fractions catch a scaling change that leaves the extremes looking right.
-    Derived from the shape alone, so there is no seed or state to remember.
+    Corners catch ordering and off-by-one errors; interior points catch a
+    scaling change. Derived from the shape alone, so there is no seed.
     """
     rows, cols = int(shape[0]), int(shape[1])
     positions = [
@@ -108,11 +100,9 @@ def load_reference(specimen) -> dict:
 
 
 def float_diffs(expected: dict, actual: dict, where: str = "") -> List[str]:
-    """Compare a flat dict of floats, collecting every mismatch.
-
-    Returns descriptions rather than asserting, so one test run reports all
-    the fields that moved instead of stopping at the first.
-    """
+    """Compare a flat dict of floats, collecting every mismatch. Returns
+    descriptions instead of asserting, so one run reports every field that
+    moved rather than stopping at the first."""
     diffs = []
     for key in sorted(set(expected) | set(actual)):
         if key not in expected:
@@ -130,7 +120,7 @@ def float_diffs(expected: dict, actual: dict, where: str = "") -> List[str]:
 
 
 def meta_diffs(expected: Dict[str, str], actual: Dict[str, str]) -> List[str]:
-    """Compare vendor metadata exactly — these are strings lifted from the
+    """Compare vendor metadata exactly. These are strings lifted from the
     file header, so any difference is a difference in how it was read."""
     diffs = []
     for key in sorted(set(expected) | set(actual)):
@@ -144,7 +134,7 @@ def meta_diffs(expected: Dict[str, str], actual: Dict[str, str]) -> List[str]:
 
 
 def format_diffs(diffs: List[str], limit: int = 20) -> str:
-    """Render a diff list for an assertion message, capped so that a wholesale
+    """Render a diff list for an assertion message, capped so a wholesale
     mismatch does not bury the terminal."""
     shown = diffs[:limit]
     rest = len(diffs) - len(shown)

@@ -1,15 +1,14 @@
-# The `gwyconvert` command-line interface
+# The `gwyconvert` command-line interface (CLI)
 
 `gwyconvert` is the helper binary that reads a vendor file and writes a
 Gwyddion-native `.gwy`. `gwyddionpy` runs it as a subprocess, but it is a
-normal command-line program and can be used on its own — in a shell script,
-a Makefile, or a workflow that has no Python in it.
+normal command-line program and works on its own — in a shell script, a
+Makefile, or a workflow with no Python in it.
 
-This page is the written form of that contract. It matters more than it
-looks: `gwyddionpy` and `gwyddionpy-converter` are released separately, so
-an older Python package regularly runs against a newer binary. Anything
-described here should be treated as an interface, not an implementation
-detail free to change.
+This page is that contract in writing. `gwyddionpy` and
+`gwyddionpy-converter` are released separately, so an older Python package
+regularly runs against a newer binary. Treat everything here as an
+interface, not an implementation detail free to change.
 
 ## Usage
 
@@ -79,8 +78,8 @@ gwyconvert: cannot write 'missing-directory/out.gwy': Cannot open file for writi
 
 Older bundles are noisy. GTK tries to load its accessibility modules and
 GdkPixbuf looks for a loader cache at the path baked in by the build
-container, producing several warnings on *every* run — successful ones
-included — ending with advice to run a command as root that does not help:
+container, producing several warnings on *every* run, successful ones
+included:
 
 ```
 Gtk-Message: Failed to load module "gail"
@@ -110,10 +109,10 @@ built-in loaders:
 (gwyconvert): GwyModule-WARNING **: Duplicate function png, keeping only first
 ```
 
-It is not a fault: Gwyddion keeps the first and carries on, and the format
-appears exactly once in `--list-formats`. No environment variable reaches it,
-so `gwyconvert` silences warnings while it registers modules. Anything at
-CRITICAL or ERROR level, and everything emitted once a conversion starts,
+This is not a fault: Gwyddion keeps the first and carries on, and the format
+appears exactly once in `--list-formats`. No environment variable reaches
+it, so `gwyconvert` silences warnings while it registers modules. Anything
+at CRITICAL or ERROR level, and everything emitted once a conversion starts,
 still reaches stderr.
 
 ## Other behaviour worth relying on
@@ -138,18 +137,18 @@ then chooses the exception by looking for the phrase `cannot load` in
 stderr: present means `UnsupportedFormatError`, absent means the more
 general `ConversionError`.
 
-> **Known weakness.** That is a match on diagnostic *text*, not on the exit
-> code. Rewording the `cannot load` message in `gwyconvert.c` would silently
+> **Known weakness.** That matches on diagnostic *text*, not on the exit
+> code. Rewording the `cannot load` message in `gwyconvert.c` would quietly
 > reclassify every unsupported file as a generic `ConversionError`. The exit
-> code cannot replace the check outright, because `1` covers unreadable
-> input and unwritable output alike — but it could carry the part it does
-> know: exit `2` means gwyddionpy built the command wrongly, which is a bug
-> in gwyddionpy rather than anything about the user's file.
+> code cannot replace the check outright, since `1` covers unreadable input
+> and unwritable output alike, but it could carry the part it does know:
+> exit `2` means gwyddionpy built the command wrongly, which is a bug in
+> gwyddionpy rather than anything about the user's file.
 
 ## Where this is enforced
 
-`gwyddionpy/tests/converter/test_cli_contract.py` exercises every statement
-on this page against the real binary — each exit code, stdout parsed as
-JSON with nothing else in it, stderr silent on success, awkward path names,
-overwrite behaviour and the input being left untouched. If you change the
-CLI, that file is what should change with it.
+[`gwyddionpy/tests/converter/test_cli_contract.py`](../../gwyddionpy/tests/converter/test_cli_contract.py)
+runs every statement on this page against the real binary: each exit code,
+stdout parsed as JSON with nothing else in it, stderr silent on success,
+awkward path names, overwrite behaviour and the input left untouched.
+Change the command-line interface and that file changes with it.

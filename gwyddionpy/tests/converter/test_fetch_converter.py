@@ -1,15 +1,9 @@
 """Downloading a prebuilt converter from a release.
 
-warning: this route is deprecated. Installing the wheel is the supported way
-to get a converter, and this module is scheduled for removal. It is tested
-anyway, and tested properly, because it still ships: code that is on its way
-out is exactly the code nobody notices breaking, and a download-and-execute
-path that breaks quietly is worse than most.
-
-Nothing here reaches the network. The module takes its base URL from
-GWYDDIONPY_CONVERTER_BASE_URL, so a local server standing in for the release
-host exercises the real download, checksum and extraction code rather than a
-stand-in for it.
+Deprecated, but still shipped, and a download-and-execute path that breaks
+quietly is worse than most. Nothing reaches the network: a local server
+stands in for the release host through GWYDDIONPY_CONVERTER_BASE_URL, so
+the real download, checksum and extraction code runs.
 """
 import hashlib
 import http.server
@@ -66,9 +60,8 @@ def cache(tmp_path, monkeypatch):
 def publish(served, body=b"#!/bin/sh\necho stub\n", name=None, checksum=None):
     """Put a tarball and its checksum where the module will look for them.
 
-    The member is named the way a real release tarball names it — with .exe
-    on Windows — taken from the module itself so the stand-in release and
-    the code that looks for the extracted binary cannot drift apart.
+    The member name comes from the module itself, so the stand-in release
+    and the code that looks for the extracted binary cannot drift apart.
     """
     asset = name or fetch._asset_name()
     member = fetch._cached_binary_name()
@@ -100,8 +93,8 @@ def test_the_warning_names_the_supported_route():
 
 
 def test_the_command_says_so_where_it_will_be_seen(release_host, cache, capsys):
-    """context part: a DeprecationWarning is invisible in a console script by
-    default, so the notice is also printed to stderr."""
+    """A DeprecationWarning is invisible in a console script by default, so
+    the notice is also printed to stderr."""
     publish(release_host)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
@@ -143,8 +136,8 @@ def test_an_unsupported_platform_says_so_rather_than_guessing(monkeypatch):
 ])
 def test_the_release_tag_follows_the_installed_version(installed, expected,
                                                        monkeypatch):
-    """context part: release tags carry a leading v while the package version
-    does not, and a development install has no matching release at all."""
+    """Release tags carry a leading "v" while the package version does not,
+    and a development install matches no release at all."""
     monkeypatch.setattr(fetch, "version", lambda _: installed)
     assert fetch._release_tag() == expected
 
@@ -244,9 +237,9 @@ def test_an_unreachable_host_is_reported_clearly(cache, monkeypatch):
 # Extraction, which handles an archive from the network
 # --------------------------------------------------------------------------
 def test_an_archive_cannot_write_outside_the_cache(tmp_path):
-    """context part: tarfile.extractall() happily follows a member path that
-    climbs out of the destination — the CVE-2007-4559 family. The guard is
-    the reason this module can extract something it just downloaded."""
+    """tarfile.extractall() follows a member path that climbs out of the
+    destination, which is the problem tracked as CVE-2007-4559. The guard is
+    what makes it safe to extract something just downloaded."""
     escape = tmp_path / "escape.tar"
     victim = tmp_path / "payload"
     victim.write_text("owned")
@@ -302,7 +295,7 @@ def test_the_cache_is_reported_only_once_something_is_in_it(cache):
 
 def test_discovery_falls_back_to_a_fetched_converter(release_host, cache,
                                                      tmp_path, monkeypatch):
-    """The last step of find_converter(): with nothing else configured, a
+    """The last step of find_converter(). With nothing else configured, a
     binary fetched earlier is what gets used."""
     from gwyddionpy._run import ENV_VAR, find_converter
 

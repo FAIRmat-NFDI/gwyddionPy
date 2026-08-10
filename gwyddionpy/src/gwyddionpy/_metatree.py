@@ -1,17 +1,9 @@
-"""Vendor-metadata hierarchy shared by the hdf5 and dict exports.
+"""Vendor-metadata hierarchy shared by the HDF5 and dict exports.
 
-Vendor keys often encode structure — a numeric group prefix
-("2:AmplitudeLimit") and/or "/"-separated paths ("Samps/line", as in
-Bruker headers). ``build_tree`` unfolds those into a nested tree so every
-export format that wants a hierarchical layout builds it the same way
-instead of re-deriving the grouping/collision rules. Leaves keep a
-"<number> <unit>" split ("0 mV" -> value 0, unit "mV") when
-``hierarchical=True``; ``hierarchical=False`` returns a flat map of raw
-values (no splitting), mirroring a flat-attributes layout.
-
-Keys that collapse onto an already-occupied tree node fall back to their
-original flat key ("/" replaced by "_") at the tree root; a further
-collision there gets a " (n)" suffix.
+Vendor keys encode structure as a group prefix ("2:AmplitudeLimit") or a
+path ("Samps/line"), which ``build_tree`` unfolds into a nested tree.
+Leaves split "<number> <unit>" unless ``hierarchical=False``; a key landing
+on an occupied node falls back to its flat form with a " (n)" suffix.
 """
 from __future__ import annotations
 
@@ -23,16 +15,12 @@ _GROUP_PREFIX = re.compile(r"^(\d+):(.+)$")
 # so list-valued entries such as "0.05 0.05" stay whole strings.
 _NUMBER_WITH_UNIT = re.compile(
     r"^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s+([^\s\d+.-].*)$", re.ASCII)
-# A number written the way an instrument writes one. Deliberately matched
-# before calling int()/float() rather than relying on them to reject
-# anything: int("1_000") is 1000 (PEP 515 digit separators) and int("２３")
-# is 23 (non-ASCII decimal digits), so a vendor string that merely looks
-# numeric would come back as a different value with the original text lost.
+# Matched before calling int()/float(), which accept more than an instrument
+# writes: int("1_000") is 1000 and int("２３") is 23, either of which would
+# silently replace the recorded text. https://peps.python.org/pep-0515/
 _PLAIN_NUMBER = re.compile(
     r"^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$", re.ASCII)
-# "NaN"/"inf" name floats and have always been stored as such: an instrument
-# writing them means "no reading here", which a numeric consumer wants as a
-# float rather than as text.
+# "NaN" and "inf" mean "no reading here", which a consumer wants as a float.
 _SPECIAL_NUMBER = re.compile(r"^[+-]?(?:nan|inf|infinity)$", re.IGNORECASE)
 
 
@@ -89,8 +77,7 @@ def _place_leaf(target, name, value):
 
 
 def build_tree(meta: Dict[str, str], hierarchical: bool = True) -> MetaTree:
-    """Unfold flat vendor metadata into the group/leaf tree shared by every
-    export that wants a hierarchical layout."""
+    """Unfold flat vendor metadata into the shared group/leaf tree."""
     if not hierarchical:
         return {key: MetaLeaf(value, None) for key, value in meta.items()}
 

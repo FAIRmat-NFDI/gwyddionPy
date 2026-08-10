@@ -1,23 +1,9 @@
-"""What must be true of the converter on whichever platform this is.
+"""What must be true of the converter on whichever platform this is: how
+the binary is launched, how a path is spelled, which calls exist.
 
-The wheel is built for Linux, macOS and Windows, and the three genuinely
-differ: how the binary is launched, what a path looks like, whether the system
-will report a child's peak memory. Every test here runs on all three and
-asserts what should hold on the one it finds itself on — none of them skips,
-because a leg that skips its own platform's tests is indistinguishable from a
-leg that passes them.
-
-Cross-platform agreement about *content* needs nothing extra: every platform
-runs the same measurements against the same committed references, so any
-build that passes them reads a file the same way as every other build that
-passes them. What is left for this file is the handful of things that are
-genuinely platform-specific.
-
-These run only when a platform is declared, with --require-platform or
-GWYDDIONPY_REQUIRE_PLATFORM. In CI each leg declares itself, and a leg that
-declared the wrong one stops the run outright. On a developer's machine they
-stay out of the way: there is nothing here the rest of the suite does not
-already cover for the platform being worked on.
+Nothing skips, because a leg that skips its own tests looks like one that
+passes them. Runs only when --require-platform or
+GWYDDIONPY_REQUIRE_PLATFORM names the platform.
 """
 import os
 import subprocess
@@ -55,10 +41,8 @@ def test_this_platform_is_one_the_converter_is_built_for():
 
 
 def test_a_declared_platform_matches_the_one_running(required_platform):
-    """context part: the declaration is enforced once at start-up, before any
-    test runs, so a mismatched leg stops rather than reporting results for the
-    wrong system. Repeated here so the guarantee is visible in the suite
-    rather than buried in a hook."""
+    """Enforced once at start-up, before any test runs. Repeated here so the
+    guarantee is visible in the suite rather than only in a hook."""
     assert required_platform is not None, (
         "these tests only run when a platform is declared, so reaching this "
         "without one means the marker is no longer being honoured"
@@ -90,16 +74,10 @@ def test_the_converter_in_use_is_an_executable_file():
 
 
 def test_the_bundled_converter_is_launched_the_way_this_platform_expects():
-    """On Linux and macOS the bundle is reached through a shell wrapper that
-    sets its library paths and then replaces itself with the real binary. On
-    Windows there is no wrapper — the executable is launched directly.
-
-    context part: the wrapper belongs to the bundle, not to gwyconvert. A
-    converter built against a system Gwyddion finds its libraries the
-    ordinary way and is a bare executable, correctly so — asking the
-    installed package for its own binary keeps this about the artifact that
-    actually ships, rather than about whichever converter discovery picked.
-    """
+    """Linux and macOS reach the bundle through a shell wrapper; Windows
+    launches the executable directly. The wrapper belongs to the bundle, so
+    this asks the installed package rather than whichever converter
+    discovery happened to pick."""
     package = pytest.importorskip(
         "gwyddionpy_converter",
         reason="no converter wheel installed, so there is no bundle to check",
@@ -138,15 +116,8 @@ def test_the_converter_runs_here():
 # The formats this platform's build carries
 # --------------------------------------------------------------------------
 def test_this_build_carries_the_modules_the_measurements_need():
-    """Every module a committed measurement depends on must exist here.
-
-    context part: this is checked live rather than against a stored list per
-    platform. A file that reads on Linux and not on Windows is the bug worth
-    catching, and running the real measurements on each platform catches it
-    directly — the format tests do exactly that. A recorded list would add
-    three files to regenerate on every Gwyddion upgrade to say the same thing
-    less directly.
-    """
+    """Checked live rather than against a stored list per platform: the bug
+    worth catching is a file that reads on one platform and not another."""
     from helpers.specimens import SPECIMENS
 
     available = set(format_names())
@@ -159,8 +130,8 @@ def test_this_build_carries_the_modules_the_measurements_need():
 
 
 def test_the_format_list_is_well_formed_here():
-    """A build that registers nothing still exits cleanly, so the entries are
-    checked rather than only counted."""
+    """A build that registers nothing still exits cleanly, so the entries
+    are checked rather than only counted."""
     formats = gwyddionpy.list_formats()
     for entry in formats:
         assert entry.keys() == {"name", "description", "can_load", "can_save",
@@ -195,9 +166,8 @@ def test_a_path_with_non_ascii_characters_works_here(specimen, tmp_path):
 
 
 def test_the_native_separator_is_accepted(specimen, tmp_path):
-    """context part: Windows uses backslashes and a drive letter, POSIX uses
-    forward slashes. Passing the string form of a path exercises whichever
-    this platform produces."""
+    """Passing a path in string form exercises whichever separator this
+    platform produces."""
     source = tmp_path / specimen.path.name
     source.write_bytes(specimen.path.read_bytes())
 
@@ -211,8 +181,8 @@ def test_the_native_separator_is_accepted(specimen, tmp_path):
 
 
 def test_the_converter_accepts_this_platforms_paths(specimen, tmp_path):
-    """Straight to the binary, since the wrapper on POSIX and the executable
-    on Windows quote their arguments differently."""
+    """Straight to the binary, since the wrapper script and the bare
+    executable quote their arguments differently."""
     output = tmp_path / "out put.gwy"
     result = subprocess.run(
         [find_converter(), str(specimen.path), str(output)],
@@ -226,9 +196,8 @@ def test_the_converter_accepts_this_platforms_paths(specimen, tmp_path):
 # Capabilities that differ, asserted rather than skipped
 # --------------------------------------------------------------------------
 def test_peak_memory_is_measurable_exactly_where_it_should_be():
-    """`getrusage` exists on POSIX and not on Windows. Both are asserted, so
-    a platform that quietly loses the ability is noticed rather than skipped
-    past."""
+    """`getrusage` exists on Linux and macOS but not Windows. Both cases are
+    asserted, so a platform quietly losing it is noticed."""
     try:
         import resource  # noqa: F401
         available = True

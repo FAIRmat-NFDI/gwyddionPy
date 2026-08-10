@@ -1,10 +1,8 @@
 """Registry of the raw measurement files the format tests run against.
 
-Each entry names one file under tests/data/, the Gwyddion module expected to
-read it, and how many image channels it should yield. Raw file, reference
-reference and provenance all live together in the vendor directory, so adding
-a vendor or a new firmware revision means one entry here plus the file — the
-tests themselves parametrize over this list and need no editing.
+Each entry names a file under tests/data/, the module expected to read it,
+and how many image channels it should yield. The format tests parametrize
+over this list, so adding a vendor costs one entry plus the file.
 """
 from __future__ import annotations
 
@@ -24,11 +22,10 @@ class Specimen:
     vendor: str
     module: str            # Gwyddion module expected to claim the file
     channels: int          # expected image-channel count
-    sha256: str = ""       # of the raw file, so a swapped or edited copy shows up
+    sha256: str = ""       # of the raw file, so a swapped copy shows up
     notes: str = ""
-    # Geometry read directly out of the raw file's own header, where the
-    # header is plain text. Used to check the converter against the vendor's
-    # own numbers rather than against a previous conversion.
+    # Geometry from the file's own text header, where it has one. Checks the
+    # converter against the vendor rather than a previous conversion.
     header_checks: Dict[str, object] = field(default_factory=dict)
 
     @property
@@ -42,8 +39,8 @@ class Specimen:
 
     @property
     def id(self) -> str:
-        """Parametrize id: the vendor directory plus filename, which is what
-        you want to read in a failure line."""
+        """Parametrize id: vendor directory plus filename, so a failure line
+        names the file."""
         return self.relpath
 
     @property
@@ -118,9 +115,8 @@ SPECIMENS: List[Specimen] = [
 
 SPECIMENS_BY_ID: Dict[str, Specimen] = {s.relpath: s for s in SPECIMENS}
 
-#: Specimens that carry image channels — the ones whose pixel content is
-#: worth comparing. Keeps the spectroscopy file out of tests that would
-#: otherwise pass vacuously on it.
+#: Specimens with pixels worth comparing. Keeps the spectroscopy file out of
+#: tests it would pass without checking anything.
 IMAGE_SPECIMENS: List[Specimen] = [s for s in SPECIMENS if s.channels > 0]
 
 

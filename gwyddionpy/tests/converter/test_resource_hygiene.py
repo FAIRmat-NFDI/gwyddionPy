@@ -1,13 +1,9 @@
-"""What reading files repeatedly leaves behind.
+"""What reading files repeatedly leaves behind: open descriptors, scratch
+directories, retained measurements.
 
-A leak of any kind — an open descriptor, a scratch directory, a parsed
-measurement still referenced — costs nothing on the first call and matters a
-great deal to anything that reads thousands of files in one run, which is
-what a batch ingest does. Nothing here would fail on a single reading; every
-check repeats an operation and looks at what accumulated.
-
-Failures are exercised as heavily as successes, because the cleanup path that
-runs when something goes wrong is the one least likely to have been tried.
+Nothing here fails on a single reading; each check repeats an operation and
+looks at what accumulated. Failures are exercised as heavily as successes,
+since their cleanup path is the least-tried one.
 """
 import gc
 import os
@@ -34,12 +30,8 @@ def specimen():
 
 
 def lowest_free_descriptor() -> int:
-    """A portable stand-in for "how many descriptors are open".
-
-    Opening a file hands back the lowest number not currently in use, so if
-    anything is leaking descriptors this number climbs. Cheaper and more
-    portable than reading /proc, and the control test below proves it works.
-    """
+    """A portable stand-in for "how many descriptors are open": opening a
+    file returns the lowest number not in use, so this climbs on a leak."""
     handle = os.open(os.devnull, os.O_RDONLY)
     os.close(handle)
     return handle
@@ -69,8 +61,7 @@ def fail_repeatedly(path, times=REPEATS):
 # The measurement technique itself
 # --------------------------------------------------------------------------
 def test_the_descriptor_probe_detects_a_real_leak():
-    """context part: a leak check that cannot fail is worse than none, so the
-    probe is shown to notice descriptors that are deliberately held open."""
+    """A leak check that cannot fail is worse than none."""
     baseline = lowest_free_descriptor()
     held = [open(os.devnull) for _ in range(5)]
     try:
@@ -101,9 +92,8 @@ def test_reading_many_times_leaks_no_descriptors(specimen):
 
 
 def test_failing_many_times_leaks_no_descriptors():
-    gwyddionpy.load  # noqa: B018 — module already imported; nothing to warm here
     with pytest.raises(gwyddionpy.GwyddionPyError):
-        gwyddionpy.load(UNREADABLE)
+        gwyddionpy.load(UNREADABLE)         # warm up
     baseline = lowest_free_descriptor()
     fail_repeatedly(UNREADABLE)
     assert lowest_free_descriptor() == baseline
@@ -157,8 +147,8 @@ def test_an_overrun_leaves_no_scratch_directories(specimen):
 
 
 def test_a_scratch_directory_exists_only_while_reading(specimen, monkeypatch):
-    """context part: shows the directories being counted are really created
-    and really removed, rather than never having existed."""
+    """Shows the directories counted above are really created and removed,
+    rather than never having existed."""
     seen = {}
     real_parse = gwyddionpy.parse_gwy
 
@@ -178,8 +168,7 @@ def test_a_scratch_directory_exists_only_while_reading(specimen, monkeypatch):
 # Retained data
 # --------------------------------------------------------------------------
 def test_discarded_readings_are_released(specimen):
-    """Nothing may hold on to a measurement after the caller drops it — the
-    whole point of reading one file at a time."""
+    """Nothing may hold a measurement after the caller drops it."""
     gwyddionpy.load(specimen.path)
     baseline = live_channels()
     read_and_discard(specimen.path)
@@ -194,8 +183,8 @@ def test_discarded_failures_retain_nothing():
 
 
 def test_an_exception_does_not_pin_the_data_it_came_from(specimen):
-    """A traceback keeps frames alive; if one holds a whole measurement, a
-    caller logging failures slowly accumulates them."""
+    """A traceback keeps frames alive; one holding a measurement would
+    accumulate them in any caller that logs failures."""
     baseline = live_channels()
     for _ in range(5):
         try:
@@ -209,8 +198,7 @@ def test_an_exception_does_not_pin_the_data_it_came_from(specimen):
 # The converter process
 # --------------------------------------------------------------------------
 def test_reading_works_immediately_after_a_run_of_overruns(specimen):
-    """If a stopped converter were left running or holding the input, the
-    next read would be the thing to notice."""
+    """A stopped converter left running would show up in the next read."""
     for _ in range(3):
         with pytest.raises(gwyddionpy.ConversionError):
             gwyddionpy.load(specimen.path, timeout=0.001)
@@ -220,20 +208,14 @@ def test_reading_works_immediately_after_a_run_of_overruns(specimen):
 
 
 def test_the_wrapper_replaces_itself_rather_than_forking():
-    """context part: on Linux the installed converter is a shell script that
-    sets up the bundle's library paths. It ends in `exec`, so the process
-    Python starts *becomes* the real converter instead of fathering it —
-    which is why stopping that process stops the conversion. A wrapper that
-    called the binary instead would strand a grandchild on every overrun,
-    and nothing else in the suite would notice.
-    """
+    """The wrapper must end in `exec`, so the process Python starts becomes
+    the converter. One that called the binary instead would strand a process
+    on every overrun."""
     from gwyddionpy._run import find_converter
 
     converter = Path(find_converter())
-    head = converter.read_bytes()[:2]
-    if head != b"#!":
-        # A plain executable: there is no wrapper, so nothing can be stranded.
-        assert converter.is_file()
+    if converter.read_bytes()[:2] != b"#!":
+        assert converter.is_file()   # no wrapper, so nothing can be stranded
         return
 
     script = converter.read_text(encoding="utf-8", errors="replace")

@@ -1,15 +1,8 @@
-"""Reading files that are damaged, truncated or simply not what they claim.
+"""Reading files that are damaged, truncated or not what they claim to be.
 
-Nothing here should hang, crash the interpreter, or come back with data. Each
-case must end in a typed gwyddionpy error, quickly, and leave nothing behind
-in the temporary directory.
-
-context part: the .gwy cases matter more than they look. A native .gwy is read
-in-process by gwyfile rather than handed to the converter, and a damaged one
-used to surface whatever the deserializer happened to raise — AssertionError
-with no message, ValueError, struct.error, UnicodeDecodeError — so a caller
-catching GwyddionPyError caught none of them, and under `python -O` the
-AssertionError disappeared entirely.
+Each must fail quickly with a typed error, never hang or return data, and
+leave nothing behind. The .gwy cases matter most: those are read in-process
+by gwyfile, which raises whatever the damage happens to break.
 """
 import tempfile
 import time
@@ -23,7 +16,7 @@ from helpers.gwy_builder import make_gwy
 from helpers.specimens import SPECIMENS_BY_ID
 
 #: Generous enough never to fire on a healthy machine, small enough that a
-#: genuine hang fails the test rather than stalling the suite.
+#: real hang fails the test rather than stalling the suite.
 RESPONSE_LIMIT_SECONDS = 30.0
 
 BRUKER = "bruker_nanoscope/VGEP-15m-.0_00000.spm"
@@ -81,8 +74,8 @@ def raw_case_ids(raw_cases):
 
 
 def test_the_case_set_is_not_empty(raw_cases):
-    """Guards the fixtures themselves: an empty case set would make every
-    parametrized test below vanish silently."""
+    """Guards the fixtures. An empty case set would make every parametrized
+    test below vanish silently."""
     assert len(raw_cases) >= 7
 
 
@@ -157,7 +150,7 @@ def test_damaged_gwy_file_is_rejected(gwy_cases, case):
 @pytest.mark.parametrize("case", ["empty", "first bytes only", "truncated",
                                   "body overwritten", "not a container at all"])
 def test_damaged_gwy_error_names_the_file_and_the_cause(gwy_cases, case):
-    """An empty message is no help at three in the morning."""
+    """An empty error message is no help to whoever holds the file."""
     path = gwy_cases[case]
     with pytest.raises(gwyddionpy.UnsupportedFormatError) as raised:
         gwyddionpy.load(path)
@@ -170,9 +163,9 @@ def test_damaged_gwy_error_names_the_file_and_the_cause(gwy_cases, case):
 @pytest.mark.parametrize("case", ["empty", "first bytes only", "truncated",
                                   "body overwritten", "not a container at all"])
 def test_damaged_gwy_error_lists_what_could_be_wrong(gwy_cases, case):
-    """The low-level fault ("unpack requires a buffer of 4 bytes") means
-    nothing to the person holding the file, so the message has to say what
-    kinds of damage produce it."""
+    """A low-level fault such as "unpack requires a buffer of 4 bytes" means
+    nothing to the caller, so the message lists the kinds of damage that
+    produce it."""
     with pytest.raises(gwyddionpy.UnsupportedFormatError) as raised:
         gwyddionpy.load(gwy_cases[case])
     message = str(raised.value).lower()
@@ -205,9 +198,9 @@ def test_rejected_raw_file_explains_what_could_be_wrong(raw_cases, case):
 
 
 def test_damaged_gwy_survives_assertions_being_disabled(gwy_cases):
-    """context part: gwyfile signals an empty container with a bare assert,
-    which `python -O` removes. Reading must fail the same way either way, so
-    the check runs in a child interpreter with optimisation on."""
+    """gwyfile signals an empty container with a bare assert, which
+    `python -O` removes. Reading must fail the same way either way, so this
+    runs in a child interpreter with optimisation on."""
     import subprocess
     import sys
 
@@ -245,8 +238,8 @@ def test_nothing_is_left_in_the_temporary_directory(raw_cases):
 
 
 def test_reading_still_works_after_a_run_of_failures(raw_cases):
-    """Repeated failures must not leave the converter or the process in a
-    state that breaks the next legitimate reading."""
+    """Repeated failures must not leave anything in a state that breaks the
+    next legitimate reading."""
     for path in raw_cases.values():
         with pytest.raises(gwyddionpy.GwyddionPyError):
             gwyddionpy.load(path)
