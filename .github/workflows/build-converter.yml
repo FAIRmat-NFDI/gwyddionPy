@@ -101,6 +101,74 @@ jobs:
           name: cibw-wheels-${{ matrix.os }}
           path: wheelhouse/*.whl
 
+  # The suite against the wheels just built, on every platform they are
+  # built for. pytest.yml's `pytest (installed wheel, ...)` legs install
+  # gwyddionpy-converter from the index, so they exercise the last release
+  # and cannot see a converter change until after it ships — which meant a
+  # fix to gwyconvert.c or to the build recipe had no way of being checked
+  # before it was published. This closes that gap: same workflow as the
+  # build, so the artifact is simply there, with no cross-workflow lookup
+  # and nothing to race.
+  #
+  # Not a replacement for those legs. They answer a different question —
+  # what someone installing the released wheel today actually gets — and a
+  # difference between the two is worth seeing, because it means a release
+  # is due.
+  test-built-wheels:
+    name: Test built wheel (${{ matrix.os }})
+    needs: wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-15
+            platform: macos
+          - os: macos-15-intel
+            platform: macos
+          - os: windows-latest
+            platform: windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same reasoning as pytest.yml: the locale tests demonstrate
+      # independence from the machine's number formatting and need a
+      # comma-decimal locale to exist before they can show anything.
+      - name: Generate a comma-decimal locale (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y locales
+          sudo locale-gen de_DE.UTF-8
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}
+          path: wheelhouse
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      # The wheel built here, installed the way a user installs one. Its
+      # version is the throwaway 0.0.0 of a pull_request build, so it is
+      # named by path rather than by requirement.
+      - name: Install gwyddionpy and the freshly built converter wheel
+        shell: bash
+        run: |
+          uv pip install wheelhouse/*.whl
+          uv pip install "./gwyddionpy[test]"
+
+      - name: Test with pytest
+        shell: bash
+        env:
+          GWYDDIONPY_REQUIRE_PLATFORM: ${{ matrix.platform }}
+        run: pytest gwyddionpy/tests gwyddionpy-converter/tests
+
   # Produces the tarball attached to the GitHub Release, which
   # gwyddionpy's `gwyddionpy-fetch-converter` / _fetch_converter.py
   # downloads. Independent of the wheels above; renaming the asset here
