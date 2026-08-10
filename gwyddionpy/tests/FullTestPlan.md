@@ -271,12 +271,19 @@ before any test.
   a test matrix cannot otherwise show: an image that changed, a typo in the
   job file, a leg that quietly fell back to the default runner. All of those
   produce a green run that tested the wrong system.
-- **Once running, nothing skips.** Each test asserts what should be true of
-  the platform it finds itself on: the converter is a shell wrapper on Linux
-  and macOS and a plain `.exe` on Windows, paths use the native separator,
-  and the memory-measuring call exists exactly where it should. A capability
-  that should be absent is asserted absent, so a platform quietly losing one
-  is noticed.
+- **Once running, nothing skips for want of a capability.** Each test asserts
+  what should be true of the platform it finds itself on: paths use the
+  native separator, and the memory-measuring call exists exactly where it
+  should. A capability that should be absent is asserted absent, so a
+  platform quietly losing one is noticed.
+- **The wrapper belongs to the bundle, not to gwyconvert.** The wheel is
+  reached through a shell wrapper on Linux and macOS that sets its library
+  paths before exec-ing the real binary, and directly as a plain `.exe` on
+  Windows. A converter built against a system Gwyddion finds its libraries
+  the ordinary way and is correctly a bare executable, so that test asks the
+  installed package for its own binary and skips where no wheel is installed
+  — the two source-building CI jobs. What is asserted of *any* converter, in
+  every job, is that it is an executable file that runs.
 - **No stored format lists per platform.** An earlier draft recorded them and
   compared; it was dropped as needless upkeep. Agreement about content
   already follows from every platform running the same measurements against
@@ -378,8 +385,9 @@ long batch job would eventually hit.
   failures.
 - **Both measuring techniques are proved to work first**, against a
   deliberate leak. Without that, a check that cannot fail is worse than none.
-- **Leftover processes** are covered by checking the wrapper `exec`s the real
-  binary, rather than by listing processes — which has no portable form.
+- **Leftover processes** are covered by checking that the bundle's wrapper
+  `exec`s the real binary (§2.9), rather than by listing processes — which
+  has no portable form.
 
 ### 2.15 Generated inputs — **done, and it paid for itself**
 

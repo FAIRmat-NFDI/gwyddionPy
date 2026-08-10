@@ -19,6 +19,7 @@ declared the wrong one stops the run outright. On a developer's machine they
 stay out of the way: there is nothing here the rest of the suite does not
 already cover for the platform being worked on.
 """
+import os
 import subprocess
 from pathlib import Path
 
@@ -81,11 +82,29 @@ def test_platform_labels_are_understood():
 # --------------------------------------------------------------------------
 # How the converter is launched here
 # --------------------------------------------------------------------------
-def test_the_converter_is_launched_the_way_this_platform_expects():
+def test_the_converter_in_use_is_an_executable_file():
+    """True of whichever converter this run found, however it was obtained."""
+    converter = Path(find_converter())
+    assert converter.is_file()
+    assert os.access(converter, os.X_OK), f"{converter} is not executable"
+
+
+def test_the_bundled_converter_is_launched_the_way_this_platform_expects():
     """On Linux and macOS the bundle is reached through a shell wrapper that
     sets its library paths and then replaces itself with the real binary. On
-    Windows there is no wrapper — the executable is launched directly."""
-    converter = Path(find_converter())
+    Windows there is no wrapper — the executable is launched directly.
+
+    context part: the wrapper belongs to the bundle, not to gwyconvert. A
+    converter built against a system Gwyddion finds its libraries the
+    ordinary way and is a bare executable, correctly so — asking the
+    installed package for its own binary keeps this about the artifact that
+    actually ships, rather than about whichever converter discovery picked.
+    """
+    package = pytest.importorskip(
+        "gwyddionpy_converter",
+        reason="no converter wheel installed, so there is no bundle to check",
+    )
+    converter = Path(package.binary_path())
     assert converter.is_file()
 
     starts_with_shebang = converter.read_bytes()[:2] == b"#!"
