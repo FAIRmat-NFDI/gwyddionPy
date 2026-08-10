@@ -186,6 +186,19 @@ convert(const gchar *input, const gchar *output)
 int
 main(int argc, char *argv[])
 {
+#ifdef G_OS_WIN32
+    /* Windows hands main() its arguments in the process code page, so a path
+     * holding anything outside it — "Ångström-messungen" — arrives already
+     * mangled and cannot be opened, reported as "Cannot open file for
+     * reading: Invalid argument". g_win32_get_command_line() returns the
+     * real command line as UTF-8, which is the encoding GLib's file
+     * functions and Gwyddion expect on every platform. Freed by exiting. */
+    gchar **utf8_argv = g_win32_get_command_line();
+
+    argv = utf8_argv;
+    argc = (int)g_strv_length(utf8_argv);
+#endif
+
     /* Initializes GTK type machinery without requiring a display. */
     gtk_parse_args(&argc, &argv);
 
