@@ -16,6 +16,7 @@
  *
  * License: GPL-2.0-or-later (links Gwyddion libraries).
  */
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -187,6 +188,21 @@ main(int argc, char *argv[])
 {
     /* Initializes GTK type machinery without requiring a display. */
     gtk_parse_args(&argc, &argv);
+
+    /* gtk_parse_args() has just called setlocale(LC_ALL, ""), which adopts
+     * the machine's number formatting: the same measurement then reports a
+     * duty cycle of "0,881" on a German-configured machine and "0.881" on an
+     * English one, and callers reading that as a number get different
+     * answers depending on whose computer ran it.
+     *
+     * gwyddionpy also sets LC_NUMERIC=C in the environment it supplies, but
+     * that is a POSIX mechanism: the Microsoft C runtime's setlocale reads
+     * the user's OS locale and ignores LC_ALL and LC_NUMERIC entirely, so on
+     * Windows no environment can pin this from outside. Pinning it here
+     * works the same way on every platform and regardless of how the process
+     * was launched. Only the numeric category is touched, so the µm and °C
+     * this metadata is full of keep their encoding. */
+    setlocale(LC_NUMERIC, "C");
 
     if (argc == 2 && gwy_strequal(argv[1], "--list-formats")) {
         init_gwyddion();
