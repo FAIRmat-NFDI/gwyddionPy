@@ -120,6 +120,13 @@ def test_the_package_declares_its_licence():
     assert "GPL" in declared.upper(), f"no GPL statement in: {declared[:200]}"
 
 
+#: What a shared library is called in the bundle, which differs by platform:
+#: Linux versions the file name (libgwyddion2.so.0) where macOS does not
+#: (libgwyddion2.0.dylib). Matching only one of them would let the check pass
+#: vacuously on the other, which is exactly what it exists to prevent.
+LIBRARY_PATTERNS = ("lib/*.so", "lib/*.so.*", "lib/*.dylib")
+
+
 def test_the_bundle_carries_its_own_libraries(binary):
     """context part: the bundle ships Gwyddion and its dependencies beside
     the binary, which is what lets it run on a machine with no Gwyddion
@@ -128,7 +135,8 @@ def test_the_bundle_carries_its_own_libraries(binary):
     if binary.read_bytes()[:2] != b"#!":
         pytest.skip("no wrapper script on this platform")
 
-    bundled = list(binary.parent.glob("lib/*.so*"))
+    bundled = [path for pattern in LIBRARY_PATTERNS
+               for path in binary.parent.glob(pattern)]
     assert bundled, f"no bundled libraries beside {binary}"
     assert any("gwy" in path.name for path in bundled), (
         "the bundle carries libraries but none of them are Gwyddion's"
