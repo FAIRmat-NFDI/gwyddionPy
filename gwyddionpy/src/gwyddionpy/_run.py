@@ -39,6 +39,43 @@ _OTHER_LOCALE_CATEGORIES = (
     "LC_CTYPE", "LC_COLLATE", "LC_TIME", "LC_MONETARY", "LC_MESSAGES",
 )
 
+#: Name of the empty file GdkPixbuf is pointed at. Lives in the cache
+#: directory because that is what it is: a fixed, reproducible artefact this
+#: package creates once and reuses, safe to delete at any time.
+_PIXBUF_CACHE_NAME = "no-pixbuf-loaders.cache"
+
+
+def _empty_pixbuf_loader_cache() -> str:
+    """An existing empty file to point GdkPixbuf's loader cache at.
+
+    It has to be a real, readable, regular file. The obvious choice is the
+    null device, and that works on POSIX because /dev/null is readable and
+    yields no loaders. On Windows os.devnull is "nul", a character device
+    GLib cannot build a readable channel from: GdkPixbuf then trips
+
+        GLib-CRITICAL **: g_io_channel_read_line: assertion
+        'channel->is_readable' failed
+
+    on every run, successful ones included, which is exactly the noise this
+    is here to prevent. A path that does not exist is no good either — that
+    produces GdkPixbuf's "your installation is broken" warning. An empty
+    file is silent on every platform.
+
+    Falls back to the null device if the cache directory cannot be written,
+    since a read-only or absent home is not a reason to fail a conversion.
+    """
+    from platformdirs import user_cache_dir
+
+    try:
+        directory = Path(user_cache_dir("gwyddionpy"))
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / _PIXBUF_CACHE_NAME
+        if not path.is_file():
+            path.touch()
+        return str(path)
+    except OSError:
+        return os.devnull
+
 
 def converter_environment() -> dict:
     """The environment the converter subprocess runs in.
@@ -83,9 +120,11 @@ def converter_environment() -> dict:
     # end up quoted in this package's own error messages. gwyconvert draws
     # nothing and the bundle carries no pixmap module, so neither is needed;
     # the format list and every conversion are unchanged with both cleared.
+    # See _empty_pixbuf_loader_cache() for why GdkPixbuf gets an empty file
+    # rather than the null device.
 
     env["GTK_MODULES"] = ""
-    env["GDK_PIXBUF_MODULE_FILE"] = os.devnull
+    env["GDK_PIXBUF_MODULE_FILE"] = _empty_pixbuf_loader_cache()
     return env
 
 
