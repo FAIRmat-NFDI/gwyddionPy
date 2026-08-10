@@ -14,6 +14,14 @@ references had a comma baked into them until this was pinned.
 Each test states which locale it is running under and checks that the locale
 genuinely took effect, so a machine without the locale installed fails loudly
 instead of comparing the C locale against itself and passing.
+
+context part: the separator is pinned twice over, and the two are not
+interchangeable. converter_environment() sets LC_NUMERIC=C in the
+environment it hands the converter, which is a POSIX mechanism; gwyconvert
+also pins LC_NUMERIC in the process itself, which is what carries the
+guarantee on Windows, where the C runtime ignores the environment. These
+tests provoke the failure through the environment and so run only where that
+is meaningful.
 """
 import os
 import subprocess
@@ -25,6 +33,19 @@ import gwyddionpy
 from helpers import content as content_mod
 from helpers.requirements import require_specimen
 from helpers.specimens import IMAGE_SPECIMENS, SPECIMENS_BY_ID
+
+#: Whether a locale can be imposed on a child process through the
+#: environment at all. This is a POSIX mechanism: the Microsoft C runtime's
+#: setlocale(LC_ALL, "") reads the user's OS locale and ignores LC_ALL and
+#: LC_NUMERIC, so on Windows no environment this suite can construct changes
+#: how the converter formats numbers, and a test that set one would be
+#: comparing the default locale against itself.
+#:
+#: The guarantee itself still holds there, by a different route: gwyconvert
+#: pins LC_NUMERIC in the process on start-up, which works the same way on
+#: every platform. What cannot be demonstrated on Windows is this suite's
+#: way of provoking the failure, not the behaviour being relied on.
+LOCALE_IS_TAKEN_FROM_THE_ENVIRONMENT = os.name != "nt"
 
 #: Locales whose decimal separator is a comma. Several are listed because
 #: which ones exist varies between machines and CI images.
@@ -55,6 +76,8 @@ def decimal_point_under(locale_name: str) -> str:
 
 
 def find_comma_locale():
+    if not LOCALE_IS_TAKEN_FROM_THE_ENVIRONMENT:
+        return None
     for name in COMMA_LOCALE_CANDIDATES:
         if decimal_point_under(name) == ",":
             return name
@@ -66,6 +89,13 @@ COMMA_LOCALE = find_comma_locale()
 
 @pytest.fixture(scope="module")
 def comma_locale():
+    if not LOCALE_IS_TAKEN_FROM_THE_ENVIRONMENT:
+        pytest.skip(
+            "this platform does not take its locale from the environment, so "
+            "the caller's number formatting cannot be varied from here. The "
+            "converter pins LC_NUMERIC in the process itself, which is what "
+            "holds on this platform; see gwyconvert.c."
+        )
     if COMMA_LOCALE is None:
         pytest.fail(
             "no comma-decimal locale is installed, so locale independence "
