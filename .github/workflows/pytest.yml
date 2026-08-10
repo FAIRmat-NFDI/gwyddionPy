@@ -37,6 +37,15 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libgwyddion20-dev gwyddion libgtk2.0-dev libfftw3-dev pkg-config build-essential
 
+      # The locale tests prove the reader is independent of the machine's
+      # number formatting, and cannot do so unless a comma-decimal locale
+      # exists to compare against. The runner image ships only C and English
+      # ones, so generate one rather than let the tests skip themselves.
+      - name: Generate a comma-decimal locale
+        run: |
+          sudo apt-get install -y locales
+          sudo locale-gen de_DE.UTF-8
+
       - name: Build gwyconvert
         run: |
           make -C gwyddionpy-converter
@@ -81,6 +90,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential pkg-config curl libgtk2.0-dev libfftw3-dev libxml2-dev gettext
+
+      # See the note in pytest-system-package: the locale tests need a
+      # comma-decimal locale to exist before they can demonstrate anything.
+      - name: Generate a comma-decimal locale
+        run: |
+          sudo apt-get install -y locales
+          sudo locale-gen de_DE.UTF-8
 
       - name: Build Gwyddion + gwyconvert from source
         env:
