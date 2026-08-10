@@ -10,11 +10,14 @@ stdout that can be parsed without filtering, and diagnostics kept out of it.
     gwyconvert --list-formats     ->  0, the format list on stdout
     anything else                 ->  2, usage on stderr
 
-warning: run in a bare environment the binary also emits GTK and GdkPixbuf
-warnings on every call, successful ones included — a bundling artefact, not a
-diagnostic. gwyddionpy suppresses them through converter_environment(), which
-is the environment these tests use, so what is asserted here is the contract
-as callers of this package actually receive it.
+warning: the binary has two sources of noise on stderr that are artefacts
+rather than diagnostics, and both are dealt with before these tests see them.
+GTK and GdkPixbuf warn on every call in a bare environment, which
+gwyddionpy suppresses through converter_environment() — the environment these
+tests use. Gwyddion itself warns about duplicate module registrations while
+loading modules, which no environment variable reaches; gwyconvert silences
+that for the duration of registration. So what is asserted here is the
+contract as callers of this package actually receive it.
 """
 import json
 import os

@@ -100,6 +100,22 @@ GTK_MODULES= GDK_PIXBUF_MODULE_FILE=/dev/null gwyconvert scan.spm scan.gwy
 `gwyddionpy` sets both automatically, so nothing is needed when going
 through the Python package.
 
+A second source of noise appears when `gwyconvert` is built against a
+distribution's Gwyddion rather than run from the bundle. Gwyddion reports
+modules that register the same format twice — typically `png` and `jpeg`,
+which `pixmap.so` registers itself and also picks up from GdkPixbuf's
+built-in loaders:
+
+```
+(gwyconvert): GwyModule-WARNING **: Duplicate function png, keeping only first
+```
+
+It is not a fault: Gwyddion keeps the first and carries on, and the format
+appears exactly once in `--list-formats`. No environment variable reaches it,
+so `gwyconvert` silences warnings while it registers modules. Anything at
+CRITICAL or ERROR level, and everything emitted once a conversion starts,
+still reaches stderr.
+
 ## Other behaviour worth relying on
 
 - **An existing output file is overwritten**, without prompting.

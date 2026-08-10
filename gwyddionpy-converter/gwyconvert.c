@@ -32,11 +32,39 @@
  * lives in libgwydgets2, which we link anyway. */
 void gwy_widgets_type_init(void);
 
+/* Registering modules dlopen()s every file module on the system, and any of
+ * them may warn while doing so.  Against a distribution's Gwyddion this is
+ * routine rather than a fault: pixmap.so registers png and jpeg itself and
+ * also enumerates GdkPixbuf's formats, which in current GdkPixbuf have those
+ * loaders built in, so Gwyddion reports
+ *
+ *     GwyModule-WARNING **: Duplicate function png, keeping only first
+ *
+ * keeps the first and carries on.  No environment variable reaches it —
+ * GDK_PIXBUF_MODULE_FILE only governs loadable modules, not built-in ones —
+ * and it lands on stderr on every single run, successful ones included,
+ * where gwyddionpy quotes it back to the caller in its error messages.
+ *
+ * Warnings are therefore discarded for the duration of registration only.
+ * Nothing diagnostic is lost: which modules actually registered is exactly
+ * what --list-formats reports on stdout, anything at CRITICAL or ERROR level
+ * still gets through, and everything emitted once conversion starts is
+ * untouched. */
+static void
+discard_registration_warning(const gchar *domain, GLogLevelFlags level,
+                             const gchar *message, gpointer user_data)
+{
+    (void)user_data;
+    if (level & (G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL))
+        g_log_default_handler(domain, level, message, NULL);
+}
+
 static void
 init_gwyddion(void)
 {
     const gchar *const module_types[] = { "file", NULL };
     GPtrArray *module_dirs;
+    GLogFunc previous_handler;
     gchar *p, *q;
     guint i;
 
@@ -55,7 +83,10 @@ init_gwyddion(void)
         g_ptr_array_add(module_dirs, g_build_filename(q, module_types[i], NULL));
 
     g_ptr_array_add(module_dirs, NULL);
+    previous_handler = g_log_set_default_handler(discard_registration_warning,
+                                                 NULL);
     gwy_module_register_modules((const gchar**)module_dirs->pdata);
+    g_log_set_default_handler(previous_handler, NULL);
 
     for (i = 0; module_dirs->pdata[i]; i++)
         g_free(module_dirs->pdata[i]);
