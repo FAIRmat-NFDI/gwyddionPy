@@ -162,14 +162,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Into the environment setup-uv created and put on PATH, as the other
+      # jobs do. Not --system: that bypasses it for the interpreter the image
+      # happens to ship, which on Ubuntu is externally managed and refuses
+      # the install outright, and on macOS installs somewhere pytest is then
+      # not found.
       - name: Install gwyddionpy and the converter wheel
         shell: bash
         run: |
-          uv pip install --system \
+          uv pip install \
             --index-url https://pypi.org/simple/ \
             --extra-index-url https://test.pypi.org/simple/ \
             gwyddionpy-converter
-          uv pip install --system "./gwyddionpy[test]"
+          uv pip install "./gwyddionpy[test]"
 
       - name: Test with pytest
         shell: bash
