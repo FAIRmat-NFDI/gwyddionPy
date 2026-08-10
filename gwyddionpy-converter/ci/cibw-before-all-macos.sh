@@ -18,7 +18,16 @@ echo "== Installing Gwyddion build dependencies (Homebrew) =="
 # historical artifact, and the wrong choice silently yields a toolkit
 # Gwyddion 2.x cannot build against.
 # https://formulae.brew.sh/formula/gtk+
-brew install gtk+ fftw libxml2 gettext pkg-config
+#
+# `libzip` is what gives Gwyddion its zip-container readers: without it
+# configure reports no zip library and silently builds eight fewer file
+# modules — apedaxfile, nanoobserver, nanoscantech, opengps, scnxfile,
+# sensofarx, spmxfile and zonfile. Installed explicitly because relying on
+# it being present already is exactly what went wrong: the x86_64 runner
+# has it on a default search path under /usr/local and found it, while
+# arm64's /opt/homebrew is not a default, so the two architectures shipped
+# wheels that could read different numbers of formats.
+brew install gtk+ fftw libxml2 libzip gettext pkg-config
 
 # Homebrew's keg-only libraries are off the default search paths — and on
 # Apple Silicon so is $BREW_PREFIX itself, since /opt/homebrew is not a
