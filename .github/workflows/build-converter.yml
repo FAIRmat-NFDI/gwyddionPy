@@ -58,6 +58,38 @@ jobs:
           [ -z "$VERSION" ] && VERSION="0.0.0"
           echo "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_GWYDDIONPY_CONVERTER=$VERSION" >> "$GITHUB_ENV"
 
+      # Building Gwyddion from source takes about twenty minutes per
+      # platform, and pytest.yml now calls this workflow on every push so
+      # that its cross-platform legs test the converter in the branch rather
+      # than the last release. The key covers everything that decides what
+      # ends up in the wheel — the source, the build and bundling scripts,
+      # and the packaging — so a push that touches only tests or docs reuses
+      # the wheels instead of rebuilding them.
+      #
+      # Restored before the build steps rather than beside them, because on
+      # Windows the costly part is staging the bundle under MSYS2, which
+      # happens before cibuildwheel ever runs. Everything that builds is
+      # therefore gated on the miss, not just the packaging.
+      #
+      # Never on a release: `tag` sets the version compiled into the wheel,
+      # which the key does not cover, so a tagged build must not be handed a
+      # wheel built as 0.0.0. Restricting the cache to untagged runs is what
+      # keeps published artifacts always freshly built.
+      - name: Reuse the wheels when nothing that builds them has changed
+        id: wheel-cache
+        if: inputs.tag == ''
+        uses: actions/cache@v4
+        with:
+          path: wheelhouse
+          key: >-
+            gwyconvert-${{ matrix.os }}-${{ hashFiles(
+              'gwyddionpy-converter/gwyconvert.c',
+              'gwyddionpy-converter/ci/**',
+              'gwyddionpy-converter/Makefile',
+              'gwyddionpy-converter/setup.py',
+              'gwyddionpy-converter/pyproject.toml',
+              'gwyddionpy-converter/MANIFEST.in') }}
+
       # Windows only: the Gwyddion build needs a real MSYS2 MinGW64 shell,
       # which cibuildwheel's cmd-based hooks cannot provide. The bundle is
       # therefore staged in its own step BEFORE cibuildwheel; setup.py's
@@ -68,14 +100,14 @@ jobs:
       # gwyddionpy-converter/pyproject.toml [tool.cibuildwheel.windows],
       # which documents the same split from the other side.
       - name: Set up MSYS2 (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.wheel-cache.outputs.cache-hit != 'true'
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: false
 
       - name: Build and stage the Windows bundle
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.wheel-cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
         run: ./gwyddionpy-converter/ci/build-windows-bundle.sh
 
@@ -91,6 +123,7 @@ jobs:
         run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> "$GITHUB_ENV"
 
       - name: Build the wheel
+        if: steps.wheel-cache.outputs.cache-hit != 'true'
         uses: pypa/cibuildwheel@v4.1.0
         with:
           package-dir: gwyddionpy-converter
@@ -100,74 +133,6 @@ jobs:
         with:
           name: cibw-wheels-${{ matrix.os }}
           path: wheelhouse/*.whl
-
-  # The suite against the wheels just built, on every platform they are
-  # built for. pytest.yml's `pytest (installed wheel, ...)` legs install
-  # gwyddionpy-converter from the index, so they exercise the last release
-  # and cannot see a converter change until after it ships — which meant a
-  # fix to gwyconvert.c or to the build recipe had no way of being checked
-  # before it was published. This closes that gap: same workflow as the
-  # build, so the artifact is simply there, with no cross-workflow lookup
-  # and nothing to race.
-  #
-  # Not a replacement for those legs. They answer a different question —
-  # what someone installing the released wheel today actually gets — and a
-  # difference between the two is worth seeing, because it means a release
-  # is due.
-  test-built-wheels:
-    name: Test built wheel (${{ matrix.os }})
-    needs: wheels
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux
-          - os: macos-15
-            platform: macos
-          - os: macos-15-intel
-            platform: macos
-          - os: windows-latest
-            platform: windows
-
-    steps:
-      - uses: actions/checkout@v4
-
-      # Same reasoning as pytest.yml: the locale tests demonstrate
-      # independence from the machine's number formatting and need a
-      # comma-decimal locale to exist before they can show anything.
-      - name: Generate a comma-decimal locale (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y locales
-          sudo locale-gen de_DE.UTF-8
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: cibw-wheels-${{ matrix.os }}
-          path: wheelhouse
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          python-version: "3.12"
-
-      # The wheel built here, installed the way a user installs one. Its
-      # version is the throwaway 0.0.0 of a pull_request build, so it is
-      # named by path rather than by requirement.
-      - name: Install gwyddionpy and the freshly built converter wheel
-        shell: bash
-        run: |
-          uv pip install wheelhouse/*.whl
-          uv pip install "./gwyddionpy[test]"
-
-      - name: Test with pytest
-        shell: bash
-        env:
-          GWYDDIONPY_REQUIRE_PLATFORM: ${{ matrix.platform }}
-        run: pytest gwyddionpy/tests gwyddionpy-converter/tests
 
   # Produces the tarball attached to the GitHub Release, which
   # gwyddionpy's `gwyddionpy-fetch-converter` / _fetch_converter.py

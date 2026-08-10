@@ -289,11 +289,22 @@ before any test.
   already follows from every platform running the same measurements against
   the same references. What is checked live is that the build carries the
   readers the measurements need.
-- **CI:** a `pytest-installed-wheel` matrix runs on Linux, both macOS
-  variants and Windows, installing the converter wheel the way a user would.
-  That is also the only place the §2.10 packaging tests run. Linux
-  additionally generates a comma-decimal locale, without which §2.11 cannot
-  prove anything.
+- **CI:** a `pytest-built-wheel` matrix runs on Linux, both macOS variants
+  and Windows, installing the converter wheel the way a user would. That is
+  also the only place the §2.10 packaging tests run. Linux additionally
+  generates a comma-decimal locale, without which §2.11 cannot prove
+  anything.
+- **The wheel it installs is built from the branch**, by calling
+  `build-converter.yml` rather than by pulling the converter from an index.
+  An earlier version installed the published wheel, which meant these legs
+  tested the last *release*: a change to `gwyconvert.c` or to a build recipe
+  could not be checked until after it had shipped. Four real bugs reached
+  users that way — macOS arm64 registering eight formats fewer than x86_64,
+  unreadable non-ASCII paths on Windows, numbers returned with commas there,
+  and a GLib assertion on every run — none of which any leg could have
+  caught. Building the converter here is what makes this a gate on the
+  change under review rather than a report on an artifact that change
+  cannot affect.
 
 ### 2.10 The packaging layer — **done**
 

@@ -123,16 +123,32 @@ jobs:
         run: pytest gwyddionpy/tests
 
   # ---------------------------------------------------------------------
-  # The wheel as users actually install it, on every platform it is built
-  # for. These legs install gwyddionpy-converter from the index rather than
-  # building a converter locally, so they exercise the only supported route
-  # to a binary — and they are the only place the packaging tests run.
+  # The converter this branch builds, on every platform it is built for.
   #
-  # A comma-decimal locale is generated on Linux because the locale tests
-  # prove independence from it, and cannot do so if none is installed.
+  # These legs used to install gwyddionpy-converter from the index, which
+  # meant they tested the last *release*: a change to gwyconvert.c or to a
+  # build recipe could not be checked until after it had shipped, and four
+  # genuine bugs — macOS arm64 registering eight formats fewer than x86_64,
+  # unreadable non-ASCII paths on Windows, numbers coming back with commas
+  # there, and a GLib assertion on every run — reached users because nothing
+  # ever ran the suite against a converter built from the source under
+  # review. Building it here is what makes this a gate rather than a report
+  # on an artifact the change cannot affect.
+  #
+  # The build is the one in build-converter.yml, called rather than copied,
+  # so there is a single recipe and releases and tests cannot diverge.
   # ---------------------------------------------------------------------
-  pytest-installed-wheel:
-    name: pytest (installed wheel, ${{ matrix.platform }})
+  build-converter:
+    name: Build the converter wheels
+    # Empty tag: this is a test build, so the wheels are the throwaway
+    # 0.0.0 and the release-upload step inside stays switched off.
+    uses: ./.github/workflows/build-converter.yml
+    with:
+      tag: ""
+
+  pytest-built-wheel:
+    name: pytest (built wheel, ${{ matrix.platform }})
+    needs: build-converter
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -150,6 +166,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A comma-decimal locale is generated on Linux because the locale
+      # tests prove independence from it, and cannot do so if none exists.
       - name: Generate a comma-decimal locale (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -157,23 +175,31 @@ jobs:
           sudo apt-get install -y locales
           sudo locale-gen de_DE.UTF-8
 
+      - name: Collect the wheel built for this platform
+        uses: actions/download-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}
+          path: wheelhouse
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
 
-      # Into the environment setup-uv created and put on PATH, as the other
-      # jobs do. Not --system: that bypasses it for the interpreter the image
-      # happens to ship, which on Ubuntu is externally managed and refuses
-      # the install outright, and on macOS installs somewhere pytest is then
-      # not found.
-      - name: Install gwyddionpy and the converter wheel
+      # Installed into the environment setup-uv created and put on PATH, as
+      # the other jobs do. Not --system: that bypasses it for the
+      # interpreter the image happens to ship, which on Ubuntu is externally
+      # managed and refuses the install outright, and on macOS installs
+      # somewhere pytest is then not found.
+      #
+      # Named by path rather than as a requirement: a test build carries the
+      # throwaway version 0.0.0, and naming the file is also what guarantees
+      # the wheel under test is the one just built and not one resolved from
+      # an index.
+      - name: Install gwyddionpy and the converter wheel built here
         shell: bash
         run: |
-          uv pip install \
-            --index-url https://pypi.org/simple/ \
-            --extra-index-url https://test.pypi.org/simple/ \
-            gwyddionpy-converter
+          uv pip install wheelhouse/*.whl
           uv pip install "./gwyddionpy[test]"
 
       - name: Test with pytest
