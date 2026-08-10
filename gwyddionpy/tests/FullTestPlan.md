@@ -610,8 +610,6 @@ a budget.
   been executed.
 - **`setup.py`'s wheel-tag logic has no test** (§2.10), now that the
   multi-platform version has landed.
-- **The Bruker sample is committed twice**, 16 MB each, under `test-data/` and
-  `gwyddionpy/tests/data/`. One copy should go.
 - **Repository size**: ~30 MB of measurements, kept in history for ever.
   Acceptable now; revisit if §2.2 grows it a lot.
 - **Is `UnsupportedFormatError` the right type for a damaged `.gwy`?** It
