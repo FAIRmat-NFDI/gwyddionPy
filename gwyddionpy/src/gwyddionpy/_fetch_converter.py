@@ -114,10 +114,16 @@ def converter_cache_dir() -> Path:
     return Path(user_cache_dir("gwyddionpy")) / "converter"
 
 
+def _cached_binary_name() -> str:
+    """What the binary is called inside the release tarball, and so in the
+    cache once extracted: Windows executables carry .exe, nothing else does.
+    Must match the name ci/bundle-{linux,macos,windows}.sh gives it."""
+    return "gwyconvert.exe" if platform.system() == "Windows" else "gwyconvert"
+
+
 def cached_converter_path() -> Optional[Path]:
     """The cached gwyconvert binary's path, if one was already fetched."""
-    binary_name = "gwyconvert.exe" if platform.system() == "Windows" else "gwyconvert"
-    candidate = converter_cache_dir() / binary_name
+    candidate = converter_cache_dir() / _cached_binary_name()
     return candidate if candidate.is_file() else None
 
 

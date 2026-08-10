@@ -64,16 +64,22 @@ def cache(tmp_path, monkeypatch):
 
 
 def publish(served, body=b"#!/bin/sh\necho stub\n", name=None, checksum=None):
-    """Put a tarball and its checksum where the module will look for them."""
+    """Put a tarball and its checksum where the module will look for them.
+
+    The member is named the way a real release tarball names it — with .exe
+    on Windows — taken from the module itself so the stand-in release and
+    the code that looks for the extracted binary cannot drift apart.
+    """
     asset = name or fetch._asset_name()
+    member = fetch._cached_binary_name()
     staging = served / "staging"
     staging.mkdir(exist_ok=True)
-    binary = staging / "gwyconvert"
+    binary = staging / member
     binary.write_bytes(body)
 
     tarball = served / asset
     with tarfile.open(tarball, "w:gz") as archive:
-        archive.add(binary, arcname="gwyconvert")
+        archive.add(binary, arcname=member)
 
     digest = checksum or hashlib.sha256(tarball.read_bytes()).hexdigest()
     (served / f"{asset}.sha256").write_text(f"{digest}  {asset}\n")
@@ -289,7 +295,7 @@ def test_an_ordinary_archive_extracts(tmp_path):
 def test_the_cache_is_reported_only_once_something_is_in_it(cache):
     assert fetch.cached_converter_path() is None
     cache.mkdir(parents=True)
-    binary = cache / ("gwyconvert.exe" if os.name == "nt" else "gwyconvert")
+    binary = cache / fetch._cached_binary_name()
     binary.write_text("#!/bin/sh\n")
     assert fetch.cached_converter_path() == binary
 
