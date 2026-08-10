@@ -219,15 +219,15 @@ def test_metadata_values_are_never_treated_as_numbers():
 # capture and compare together
 # --------------------------------------------------------------------------
 def _round_trip(data, tmp_path):
-    """Capture a reference the way make_golden.py does, then read it back."""
+    """Capture a reference the way make_reference.py does, then read it back."""
     path = tmp_path / "reference.json"
-    content_mod.dump_golden(content_mod.extract_content(data), path)
-    # A stand-in for a Specimen: load_golden only needs somewhere to read from.
-    return content_mod.load_golden(SimpleNamespace(golden_path=path))
+    content_mod.dump_reference(content_mod.extract_content(data), path)
+    # A stand-in for a Specimen: load_reference only needs somewhere to read from.
+    return content_mod.load_reference(SimpleNamespace(reference_path=path))
 
 
 def test_captured_reference_matches_the_data_it_came_from(tmp_path):
-    """The contract make_golden.py relies on: capture, reload, compare clean."""
+    """The contract make_reference.py relies on: capture, reload, compare clean."""
     values = np.array([[np.nan, 2.0], [3.0, 4.0]])
     data = GwyData(
         channels={"Height": make_channel(data=values),
@@ -265,7 +265,7 @@ def test_a_changed_value_breaks_the_round_trip(tmp_path):
 def test_reference_file_is_valid_readable_json(tmp_path):
     data = GwyData(channels={"Height": make_channel()}, source_format="x")
     path = tmp_path / "reference.json"
-    content_mod.dump_golden(content_mod.extract_content(data), path)
+    content_mod.dump_reference(content_mod.extract_content(data), path)
 
     text = path.read_text(encoding="utf-8")
     assert text.endswith("\n")

@@ -31,7 +31,7 @@ import pytest
 
 import gwyddionpy
 from helpers import content as content_mod
-from helpers.requirements import require_golden, require_specimen
+from helpers.requirements import require_reference, require_specimen
 from helpers.specimens import SPECIMENS
 
 ALT_CONVERTER_ENV = "GWYDDIONPY_ALT_CONVERT"
@@ -95,25 +95,25 @@ def test_the_comparison_notices_a_difference():
     """context part: without this, a comparison that always returned "no
     differences" would make everything below pass and mean nothing."""
     specimen = SPECIMENS[0]
-    require_golden(specimen)
-    reference = content_mod.load_golden(specimen)
+    require_reference(specimen)
+    reference = content_mod.load_reference(specimen)
 
-    altered = content_mod.load_golden(specimen)
+    altered = content_mod.load_reference(specimen)
     altered["source_format"] = "something-else"
     assert differences(reference, altered)
 
     if reference["channels"]:
         name = reference["channel_names"][0]
-        moved = content_mod.load_golden(specimen)
+        moved = content_mod.load_reference(specimen)
         moved["channels"][name]["xreal"] *= 1.001
         assert differences(reference, moved)
 
 
 def test_a_reading_matches_itself():
     specimen = SPECIMENS[0]
-    require_golden(specimen)
-    reference = content_mod.load_golden(specimen)
-    assert differences(reference, content_mod.load_golden(specimen)) == []
+    require_reference(specimen)
+    reference = content_mod.load_reference(specimen)
+    assert differences(reference, content_mod.load_reference(specimen)) == []
 
 
 # --------------------------------------------------------------------------
@@ -123,9 +123,9 @@ def test_a_reading_matches_itself():
 def test_this_build_agrees_with_the_recorded_reading(specimen):
     """The transitive form: agreeing with the references is what makes two
     builds agree with each other."""
-    require_golden(specimen)
+    require_reference(specimen)
     fresh = content_mod.extract_content(gwyddionpy.load(specimen.path))
-    found = differences(content_mod.load_golden(specimen), fresh)
+    found = differences(content_mod.load_reference(specimen), fresh)
     assert not found, (
         "this build reads the measurement differently from the recorded "
         "reading:\n" + content_mod.format_diffs(found)

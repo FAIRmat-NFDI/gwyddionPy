@@ -36,12 +36,12 @@ def require_specimen(specimen):
         )
 
 
-def require_golden(specimen):
+def require_reference(specimen):
     """Ensure both the raw file and its reference are available."""
     require_specimen(specimen)
-    if not specimen.golden_path.is_file():
+    if not specimen.reference_path.is_file():
         pytest.fail(
             f"no reference for {specimen.relpath}. Capture one with "
-            f"`python gwyddionpy/tests/make_golden.py {specimen.relpath}`, "
+            f"`python gwyddionpy/tests/make_reference.py {specimen.relpath}`, "
             "then review the result before committing it."
         )

@@ -5,7 +5,7 @@ that is the case the geometry can be read straight out of the raw bytes and
 compared with what gwyddionpy reports, which gives an account of the numbers
 that comes from the instrument rather than from a previous conversion.
 
-context part: the golden references are captured from a conversion, so on
+context part: the references are captured from a conversion, so on
 their own they establish only that the converter still agrees with itself. If
 a first capture had been wrong, every reference test would keep pinning the
 wrong values. These checks are what break that circle, and they are the reason

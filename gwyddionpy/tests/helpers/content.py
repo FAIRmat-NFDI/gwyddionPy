@@ -5,7 +5,7 @@ JSON rather than a stored .gwy because it is readable in review and diffs
 meaningfully when a value moves, and because it does not carry the incidental
 binary differences that two Gwyddion releases produce for identical data.
 
-The writer (make_golden.py) and the readers (the format tests) both go through
+The writer (make_reference.py) and the readers (the format tests) both go through
 this module, so the schema has exactly one definition.
 """
 from __future__ import annotations
@@ -95,7 +95,7 @@ def extract_content(data) -> dict:
     }
 
 
-def dump_golden(content: dict, path) -> None:
+def dump_reference(content: dict, path) -> None:
     """Write a reference file: stable key order, trailing newline, valid JSON."""
     path.write_text(
         json.dumps(content, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
@@ -103,8 +103,8 @@ def dump_golden(content: dict, path) -> None:
     )
 
 
-def load_golden(specimen) -> dict:
-    return json.loads(specimen.golden_path.read_text(encoding="utf-8"))
+def load_reference(specimen) -> dict:
+    return json.loads(specimen.reference_path.read_text(encoding="utf-8"))
 
 
 def float_diffs(expected: dict, actual: dict, where: str = "") -> List[str]:

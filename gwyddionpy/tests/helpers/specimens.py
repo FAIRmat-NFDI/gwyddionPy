@@ -1,7 +1,7 @@
 """Registry of the raw measurement files the format tests run against.
 
 Each entry names one file under tests/data/, the Gwyddion module expected to
-read it, and how many image channels it should yield. Raw file, golden
+read it, and how many image channels it should yield. Raw file, reference
 reference and provenance all live together in the vendor directory, so adding
 a vendor or a new firmware revision means one entry here plus the file — the
 tests themselves parametrize over this list and need no editing.
@@ -36,8 +36,8 @@ class Specimen:
         return DATA_DIR / self.relpath
 
     @property
-    def golden_path(self) -> Path:
-        """Golden reference, kept beside the raw file it describes."""
+    def reference_path(self) -> Path:
+        """Reference, kept beside the raw file it describes."""
         return self.path.with_suffix(self.path.suffix + ".json")
 
     @property

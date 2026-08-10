@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Capture the golden references that the format tests compare against.
+"""Capture the references that the format tests compare against.
 
-    python gwyddionpy/tests/make_golden.py                       # all files
-    python gwyddionpy/tests/make_golden.py jpk/sample_0.jpk       # one file
-    python gwyddionpy/tests/make_golden.py sample_0.jpk           # same, short
+    python gwyddionpy/tests/make_reference.py                       # all files
+    python gwyddionpy/tests/make_reference.py jpk/sample_0.jpk       # one file
+    python gwyddionpy/tests/make_reference.py sample_0.jpk           # same, short
 
 Each reference is written beside the raw file it describes. Run this when a
 change in output is understood and intended, then read the resulting diff:
@@ -29,9 +29,9 @@ def capture(specimen) -> str:
         return f"SKIP  {specimen.relpath}: not present in tests/data/"
     data = gwyddionpy.load(specimen.path)
     content = content_mod.extract_content(data)
-    content_mod.dump_golden(content, specimen.golden_path)
+    content_mod.dump_reference(content, specimen.reference_path)
     return (
-        f"WROTE {specimen.golden_path.relative_to(specimen.path.parents[1])}: "
+        f"WROTE {specimen.reference_path.relative_to(specimen.path.parents[1])}: "
         f"{content['source_format']}, {len(content['channels'])} channel(s)"
     )
 

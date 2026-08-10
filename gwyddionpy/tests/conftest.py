@@ -5,7 +5,7 @@ Directory layout:
   converter/  locating and running the gwyconvert binary
   formats/    reading the real vendor files under data/
   helpers/    registry, reference schema and fixture builders
-  data/       raw measurement files and their golden references, by vendor
+  data/       raw measurement files and their references, by vendor
 
 Every test expects a working gwyconvert, which comes from the
 gwyddionpy-converter package installed alongside gwyddionpy.

@@ -1,12 +1,12 @@
 # Test data — provenance and licenses
 
-Raw measurement files, grouped by vendor, each with its golden reference
+Raw measurement files, grouped by vendor, each with its reference
 (`<file>.json`) beside it. Both are committed, so a checkout can run the
 format tests without fetching anything.
 
 Adding a file: drop it into the vendor directory, add an entry to
 `helpers/specimens.py` with its SHA-256, capture the reference with
-`python gwyddionpy/tests/make_golden.py <vendor>/<file>`, and record its
+`python gwyddionpy/tests/make_reference.py <vendor>/<file>`, and record its
 provenance below.
 
 | File | Format / Gwyddion module | Source | License |

@@ -13,7 +13,7 @@ the total of all of them, which is what keeps the suite affordable as more
 measurements are added — a single high-resolution scan can run to hundreds of
 megabytes once its channels are expanded to float64.
 
-References are captured with make_golden.py and reviewed before being
+References are captured with make_reference.py and reviewed before being
 committed; regenerating one to make a failing test pass is how the suite stops
 testing anything.
 """
@@ -22,7 +22,7 @@ import pytest
 
 import gwyddionpy
 from helpers import content as content_mod
-from helpers.requirements import require_golden
+from helpers.requirements import require_reference
 from helpers.specimens import SPECIMENS
 
 pytestmark = pytest.mark.formats
@@ -42,8 +42,8 @@ def reading(request):
     collectable as soon as the file's tests are done.
     """
     specimen = request.param
-    require_golden(specimen)
-    reference = content_mod.load_golden(specimen)
+    require_reference(specimen)
+    reference = content_mod.load_reference(specimen)
     data = gwyddionpy.load(specimen.path)
     _OPEN.append(specimen.relpath)
     try:
@@ -68,7 +68,7 @@ def paired_channels(reference, data):
 def test_every_specimen_has_a_reference():
     """A file without a reference would drop silently out of everything
     below, so check the set directly."""
-    missing = [s.relpath for s in SPECIMENS if not s.golden_path.is_file()]
+    missing = [s.relpath for s in SPECIMENS if not s.reference_path.is_file()]
     assert not missing, "files with no reference: " + ", ".join(missing)
 
 
