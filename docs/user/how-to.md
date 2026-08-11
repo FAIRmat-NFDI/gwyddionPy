@@ -19,15 +19,84 @@ All three end with the same working install. Option 1 unless you have a
 reason to prefer another.
 
 > **TestPyPI note.** Both packages are published to TestPyPI only for now,
-> so every `pip install` below carries two index flags. Drop them once the
+> so every install command below carries index flags pointing there, with
+> real PyPI as the fallback for the dependencies. Drop those flags once the
 > packages reach production PyPI.
 
-## Option 1 — the companion wheel
+## Which package do I install?
+
+Three names come up, and only two of them are actual packages:
+
+| Name | What it is | License |
+|---|---|---|
+| `gwyddionpy` | The Python package. Pure Python: the data model, the parser, the exports. **Reads no vendor format on its own** — it needs the binary. | Apache-2.0 |
+| `gwyddionpy-converter` | A separate distribution whose only payload is a prebuilt `gwyconvert` binary plus the Gwyddion libraries it links, shipped as package data. No Python API to speak of. | GPL-2.0-or-later |
+| `gwyddionpy[converter]` | **Not a third package** — an [extra](https://packaging.python.org/en/latest/specifications/dependency-specifiers/#extras) on the first that declares a dependency on the second. Installing it gets you both. | both of the above |
+
+So `pip install "gwyddionpy[converter]"` and
+`pip install gwyddionpy gwyddionpy-converter` install the same two
+distributions. The extra is simply the form that keeps the version pin
+correct — the release workflow rewrites it to pin the matching converter
+version, which typing the two names yourself does not do.
+
+**Install `gwyddionpy[converter]`** unless one of the following applies:
+
+- **You cannot have GPL code in the environment.** Install plain
+  `gwyddionpy` and get the binary by [option 2](#option-2--a-prebuilt-binary-from-a-github-release-deprecated)
+  or [option 3](#option-3--build-gwyconvert-yourself). The binary then lives
+  outside your site-packages, and the licenses stay separated.
+- **You only ever read `.gwy` files.** Plain `gwyddionpy` is enough: a `.gwy`
+  input is parsed directly and never touches the converter.
+- **You are on a platform with no converter wheel** — anything other than
+  Linux x86_64, macOS, and Windows x86_64. Use option 3.
+- **You are packaging gwyddionpy as a library dependency.** Depend on plain
+  `gwyddionpy` and let the application decide about the GPL binary. This is
+  why the converter is an extra and never a hard dependency.
+
+Installing `gwyddionpy-converter` **alone** is a valid thing to do, but it
+gets you only the binary — there is no `import` in it worth having. Do that
+when you want `gwyconvert` for [shell use](gwyconvert-cli.md) and nothing else.
+
+## Setting up an environment
+
+Either tool works; pick one and use it for the rest of this page. `uv` is a
+drop-in, much faster replacement for `venv`+`pip` and is what this project's
+own tooling uses.
+
+**With `uv`:**
+
+```bash
+uv venv                     # creates .venv using a suitable Python
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+```
+
+`uv venv --python 3.12` pins a specific interpreter, downloading it if it is
+not already on the machine. gwyddionpy needs **Python 3.9 or newer**.
+
+**With `venv` and `pip`:**
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python3 -m pip install --upgrade pip
+```
 
+Activating is optional under `uv` — `uv pip install` finds `./.venv` by
+itself — but it does mean a bare `python` is the right one afterwards.
+
+## Option 1 — the companion wheel
+
+**With `uv`:**
+
+```bash
+uv pip install --default-index https://test.pypi.org/simple \
+               --index https://pypi.org/simple \
+               "gwyddionpy[converter]"
+```
+
+**With `pip`:**
+
+```bash
 pip install -i https://test.pypi.org/simple/ \
             --extra-index-url https://pypi.org/simple/ \
             "gwyddionpy[converter]"
@@ -37,9 +106,20 @@ That is all. The `[converter]` extra pulls `gwyddionpy-converter`, which
 ships `gwyconvert` as package data; gwyddionpy finds it automatically, with
 no environment variable to set. Skip to [Verify](#verify).
 
+Add more extras in the same brackets — `"gwyddionpy[converter,hdf5]"` also
+gets you `h5py` for the HDF5 export. The full set is `converter`, `hdf5`,
+`test` and `dev`.
+
 The extra is opt-in on purpose: a plain `pip install gwyddionpy` stays
 entirely Apache-2.0, so requesting the GPL binary is always your explicit
 choice.
+
+> **A note on the index flags.** `pip`'s `-i` and `uv`'s `--default-index`
+> both mean "look here first"; `--extra-index-url` and `uv`'s `--index` add
+> PyPI for the dependencies (numpy, gwyfile, platformdirs), which are not on
+> TestPyPI. Working on the package itself from inside `gwyddionpy/`, `uv`
+> picks both indexes up from the `[tool.uv]` table in its `pyproject.toml`
+> and you can drop the flags.
 
 ## Option 2 — a prebuilt binary from a GitHub Release (deprecated)
 
@@ -50,17 +130,20 @@ choice.
 > move across.
 
 Useful when you want the binary without a GPL package in your environment.
+With an environment already [set up](#setting-up-an-environment):
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-
 pip install -i https://test.pypi.org/simple/ \
             --extra-index-url https://pypi.org/simple/ \
             gwyddionpy
+# uv: uv pip install --default-index https://test.pypi.org/simple \
+#                    --index https://pypi.org/simple gwyddionpy
 
 gwyddionpy-fetch-converter
 ```
+
+Note the plain `gwyddionpy` here, with no `[converter]`: this route installs
+the Apache-2.0 package only, and the binary lands outside site-packages.
 
 `gwyddionpy-fetch-converter` downloads the binary for your platform,
 verifies its checksum, and unpacks it into a per-user cache directory that
@@ -93,7 +176,7 @@ cd gwyddionPy
 make -C gwyddionpy-converter
 
 # 3. A Python environment with the gwyddionpy package
-python3 -m venv .venv
+python3 -m venv .venv          # or: uv venv
 source .venv/bin/activate
 pip install -i https://test.pypi.org/simple/ \
             --extra-index-url https://pypi.org/simple/ \
@@ -102,6 +185,10 @@ pip install -i https://test.pypi.org/simple/ \
 # 4. Point gwyddionpy at the binary you just built
 export GWYDDIONPY_CONVERT=$PWD/gwyddionpy-converter/gwyconvert
 ```
+
+Set `GWYDDIONPY_CONVERT` in your shell profile to make step 4 stick across
+sessions; it is the first place `find_converter()` looks after an explicit
+`converter=` argument.
 
 Package names above are Debian's and Ubuntu's. On other distributions
 install the equivalents (Fedora: `gwyddion` + `gwyddion-devel`) and continue
@@ -136,6 +223,12 @@ Then try a real measurement file:
 ```bash
 python3 -c "import gwyddionpy; d = gwyddionpy.load('your_scan_file'); print(list(d.channels))"
 ```
+
+## Next steps
+
+[`usage.md`](usage.md) picks up here: what `load()` returns, exporting to
+JSON, HDF5, a Python `dict` or `.gwy`, and worked examples on real vendor
+files.
 
 ## Using `gwyconvert` on its own
 
