@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "source_format": "spmlabf",
+  "channel_names": [
+    "Height"
+  ],
+  "channels": {
+    "Height": {
+      "shape": [
+        512,
+        512
+      ],
+      "size": 262144,
+      "dtype": "float64",
+      "xreal": 1e-06,
+      "yreal": 1e-06,
+      "si_unit_xy": "m",
+      "si_unit_z": "m",
+      "pixels": {
+        "0,0": 1.8617399949789047e-06,
+        "0,511": 1.8639085362911224e-06,
+        "511,0": 1.8603113197803495e-06,
+        "511,511": 1.8618752868890761e-06,
+        "256,256": 1.8262044872760771e-06,
+        "170,128": 1.8372763053417205e-06,
+        "341,384": 1.819814985823631e-06
+      },
+      "meta": {
+        "CreationTime": "Jun.17.2026 08:03:43",
+        "DataID": "SIG_TOPO",
+        "GainD": "0.000000 (1000.000000)",
+        "GainI": "0.300000 (1000.000000)",
+        "GainP": "0.800000 (1000.000000)",
+        "Leveling": "1D Line Fit",
+        "Mode": "Peak Force Tapping",
+        "Rotation": "0.0 °",
+        "ScanDirection": "BACKWARD",
+        "ScanningRate": "1.0000 µm/s",
+        "SetPoint": "0.030000 V",
+        "X Transfer Coefficient": "4.423937 µm/V",
+        "XLinGainD": "0.000000 (1200.000000)",
+        "XLinGainI": "12.000000 (1200.000000)",
+        "XLinGainP": "1.000000 (1200.000000)",
+        "Y Transfer Coefficient": "4.856491 µm/V",
+        "YLinGainD": "0.000000 (1200.000000)",
+        "YLinGainI": "12.000000 (1200.000000)",
+        "YLinGainP": "1.000000 (1200.000000)",
+        "Z Transfer Coefficient": "0.773091 µm/V"
+      }
+    }
+  }
+}

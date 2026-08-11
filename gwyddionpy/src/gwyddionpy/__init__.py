@@ -1,10 +1,8 @@
-"""gwyddionpy — read any Gwyddion-supported SPM raw file into NumPy.
+"""Read any scanning probe microscopy (SPM) raw file that Gwyddion supports.
 
 Pipeline: raw file -> gwyconvert subprocess -> .gwy -> gwyfile -> GwyData.
-Native .gwy inputs skip the converter and are parsed directly.
-
-The public surface is everything in ``__all__``; names prefixed with an
-underscore are internal and may change without notice.
+A .gwy input skips the converter. Everything in ``__all__`` is public;
+underscore-prefixed names are internal. Gwyddion: http://gwyddion.net
 """
 from __future__ import annotations
 
@@ -13,22 +11,23 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Optional
 
-from ._errors import (
+from gwyddionpy._errors import (
     ConversionError,
     ConverterFetchError,
     ConverterNotFoundError,
     GwyddionPyError,
     UnsupportedFormatError,
 )
-from ._fetch_converter import ensure_converter
-from ._model import Channel, GwyData
-from ._parse import parse_gwy
-from ._run import query_formats, run_converter
+from gwyddionpy._fetch_converter import ensure_converter
+from gwyddionpy._model import Channel, GwyData
+from gwyddionpy._parse import parse_gwy
+from gwyddionpy._run import query_formats, run_converter
 
 try:
     __version__ = version("gwyddionpy")
 except PackageNotFoundError:  # pragma: no cover — not installed, e.g. running from a source checkout
     __version__ = "unknown"
+
 __all__ = [
     "load",
     "list_formats",
@@ -44,12 +43,14 @@ __all__ = [
 ]
 
 
-def load(path, *, converter: Optional[str] = None) -> GwyData:
-    """Load a raw SPM file of any Gwyddion-supported format.
+def load(
+    path, *, converter: Optional[str] = None, timeout: Optional[float] = None
+) -> GwyData:
+    """Load a raw file of any Gwyddion-supported format.
 
-    ``converter`` is an explicit path to gwyconvert; when omitted, it is
-    discovered by ``_run.find_converter()``. A .gwy input is read directly
-    and needs no converter at all.
+    ``converter`` is a path to gwyconvert, otherwise discovered by
+    ``_run.find_converter()``; a .gwy input needs none. ``timeout`` caps the
+    converter's run time, defaulting to ``_run.DEFAULT_TIMEOUT``.
     """
     path = Path(path)
     if not path.is_file():
@@ -58,15 +59,19 @@ def load(path, *, converter: Optional[str] = None) -> GwyData:
     if path.suffix.lower() == ".gwy":
         return parse_gwy(path)
 
+    # Removed on the way out, whether the conversion succeeds or not.
     with tempfile.TemporaryDirectory(prefix="gwyddionpy-") as tmpdir:
         converted = Path(tmpdir, "converted.gwy")
-        module = run_converter(path, converted, converter=converter)
+        module = run_converter(path, converted, converter=converter,
+                               timeout=timeout)
         data = parse_gwy(converted)
     data.source_format = module
     return data
 
 
-def list_formats(converter: Optional[str] = None) -> list:
+def list_formats(
+    converter: Optional[str] = None, timeout: Optional[float] = None
+) -> list:
     """List the file formats the converter supports (dicts with name,
     description, can_load, can_save, detectable)."""
-    return query_formats(converter)
+    return query_formats(converter, timeout=timeout)

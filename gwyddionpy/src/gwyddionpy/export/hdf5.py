@@ -1,24 +1,15 @@
-"""Plain-HDF5 export of GwyData.
+"""Plain-HDF5 export of GwyData. Not NeXus; that is pynxtools-spm's job.
 
-Layout: one group per channel under /channels, image as a compressed
-dataset ``data``, physical dimensions/units as group attributes, vendor
-metadata under the ``meta`` subgroup. The grouping and value/unit-splitting
-rules live in ``gwyddionpy._metatree``, shared with the dict export so the
-two stay structurally identical — change one and check the other. This is
-plain HDF5, not NeXus; NeXus output is pynxtools-spm's job.
-
-With ``hierarchical_meta=True`` (default) vendor metadata keys are
-unfolded into nested HDF5 groups and each entry is stored as a scalar
-*dataset* (so it is visible in viewer trees such as H5Web); values of the
-form "<number> <unit>" have the number stored as the dataset value and the
-unit string put in a ``unit`` attribute on the dataset.
-
-With ``hierarchical_meta=False`` every entry stays a raw-string attribute on
-the flat ``meta`` group — much more compact, no value/unit splitting.
+One group per channel under /channels: the image as a compressed ``data``
+dataset, dimensions and units as attributes, vendor metadata under ``meta``.
+``hierarchical_meta=True`` (default) unfolds metadata into nested groups of
+scalar datasets; ``False`` leaves flat string attributes. Mirrors
+``export/dict.py``, so change either and check the other.
 """
 from __future__ import annotations
 
-from .._metatree import MetaLeaf, build_tree
+from gwyddionpy._metatree import MetaLeaf, build_tree
+from gwyddionpy.export import channel_keys
 
 
 def _write_tree(group, tree):
@@ -48,9 +39,11 @@ def write(data, path, compression: str = "gzip",
     with h5py.File(path, "w") as f:
         f.attrs["source_format"] = data.source_format or ""
         root = f.create_group("channels")
+        # "/" cannot appear in a group name. channel_keys also keeps two
+        # channels that sanitize alike apart.
+        keys = channel_keys(data.channels)
         for name, ch in data.channels.items():
-            # "/" is the HDF5 path separator and cannot appear in a name.
-            group = root.create_group(name.replace("/", "_"))
+            group = root.create_group(keys[name])
             group.attrs["name"] = name
             group.attrs["xreal"] = ch.xreal
             group.attrs["yreal"] = ch.yreal

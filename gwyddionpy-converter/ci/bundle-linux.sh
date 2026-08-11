@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Turn a freshly-built gwyconvert plus its Gwyddion install prefix into a
-# self-contained, relocatable bundle directory. (macOS and Windows have
-# their own counterparts: bundle-macos.sh, bundle-windows.sh.)
+# Turn a freshly built gwyconvert plus its Gwyddion install prefix into a
+# self-contained, relocatable bundle directory. macOS and Windows have their
+# own counterparts: bundle-macos.sh, bundle-windows.sh.
 #
-# One recipe, two callers — keep it that way, two copies would drift:
+# One recipe, two callers. Keep it that way; two copies would drift.
 #   - build-linux.sh           -> bundle to a temp dir, tar it as the
 #                                 GitHub Release asset.
 #   - cibw-before-all-linux.sh -> bundle straight into the wheel's package
@@ -11,60 +11,60 @@
 #
 # Inputs (all required, via environment):
 #   PREFIX            Gwyddion install prefix from build-gwyddion.sh
-#   BUILT_GWYCONVERT  the gwyconvert ELF just built against it
-#   BUNDLE_DIR        destination; ends up holding `gwyconvert` (wrapper)
-#                     + `lib/`. gwyddionpy_converter.binary_path() looks
-#                     for that wrapper name.
+#   BUILT_GWYCONVERT  the gwyconvert executable just built against it
+#   BUNDLE_DIR        destination; ends up holding `gwyconvert` (a wrapper
+#                     script) and `lib/`.
+#                     gwyddionpy_converter.binary_path() looks for that
+#                     wrapper name.
 #
-# Bundling policy: ship everything gwyconvert loads at run time EXCEPT
-# glibc (libc/libm/libpthread/libdl/librt and the dynamic linker). glibc is
-# tied to the host by design and must never travel in a redistributable
-# bundle — pinning a baseline instead of bundling it is the whole point of
-# manylinux. Everything else errs toward bundling MORE (the X11 client
-# libraries included), because a headless converter should also work inside
-# minimal server and container images.
+# Bundling policy: ship everything gwyconvert loads at run time except the
+# C library itself (libc, libm, libpthread, libdl, librt and the dynamic
+# linker). Those are tied to the host and must never travel in a
+# redistributable bundle; pinning a baseline instead is the point of
+# manylinux. Everything else errs toward bundling more, including the X11
+# client libraries, so the converter also works in minimal container images.
 set -euo pipefail
 
 : "${PREFIX:?PREFIX must be set (Gwyddion install prefix)}"
-: "${BUILT_GWYCONVERT:?BUILT_GWYCONVERT must be set (path to the built ELF)}"
+: "${BUILT_GWYCONVERT:?BUILT_GWYCONVERT must be set (path to the built binary)}"
 : "${BUNDLE_DIR:?BUNDLE_DIR must be set (bundle destination directory)}"
 
 echo "== Bundling runtime dependencies into $BUNDLE_DIR =="
-# Layout: gwyconvert (wrapper script) + lib/gwyconvert.real (the ELF) +
-# lib/*.so (bundled runtime deps, siblings of the ELF) + lib/gwyddion/
-# (Gwyddion's own file-format module plugins). The ELF's RPATH is $ORIGIN,
-# which resolves correctly since everything lives in the same lib/ dir.
+# Layout: gwyconvert (wrapper script), lib/gwyconvert.real (the binary),
+# lib/*.so (its bundled dependencies) and lib/gwyddion/ (Gwyddion's own
+# file-format plugins). The binary's library search path is set to $ORIGIN,
+# its own directory, so everything in lib/ resolves wherever the bundle
+# ends up.
 rm -rf "$BUNDLE_DIR"
 mkdir -p "$BUNDLE_DIR/lib"
 cp "$BUILT_GWYCONVERT" "$BUNDLE_DIR/lib/gwyconvert.real"
 
-# gwyconvert.c locates its format-parser plugins through
-# gwy_find_self_dir(), which on Unix returns a path compiled into
-# libgwyddion at Gwyddion's build time — here $PREFIX/lib, a temporary
-# directory that will not exist on a user's machine — unless the
-# GWYDDION_LIBDIR environment variable overrides it (see
-# libgwyddion/gwyutils.c upstream). So the plugins must be copied out, and
-# the wrapper below must point GWYDDION_LIBDIR at the copy. Skip either and
-# gwyconvert exits 0 while reporting zero formats.
+# gwyconvert finds its format plugins through Gwyddion's
+# gwy_find_self_dir(), which returns a path compiled into libgwyddion at
+# Gwyddion's own build time — here $PREFIX/lib, a temporary directory that
+# will not exist on a user's machine — unless GWYDDION_LIBDIR overrides it.
+# So the plugins are copied out here and the wrapper below points
+# GWYDDION_LIBDIR at the copy. Skip either and gwyconvert exits 0 while
+# reporting zero formats.
 cp -r "$PREFIX/lib/gwyddion" "$BUNDLE_DIR/lib/gwyddion"
 
-# glibc's own pieces: never bundle these (see policy note above).
+# The C library's own pieces: never bundled, per the policy note above.
 EXCLUDE_RE='^(linux-vdso\.so|ld-linux|libc\.so|libm\.so|libpthread\.so|libdl\.so|librt\.so|libresolv\.so|libnsl\.so|libutil\.so)'
 
-# ldd the executable AND every dlopen()'d module. The modules have their
-# own NEEDED libraries that appear in no other file's ldd output (libxml2,
-# for the anasys_xml/spml/zyvex parsers). Miss them and those formats
-# vanish from --list-formats on any machine lacking the library — invisible
-# on the build machine, whose system packages fill the gap.
-# LD_LIBRARY_PATH lets ldd resolve the modules' deps against the fresh
-# build: the executable has an explicit RPATH, the libtool-built modules
-# do not necessarily.
+# Walk the executable and every loadable module. The modules pull in
+# libraries that appear in no other file's dependency list — libxml2, for
+# the anasys_xml, spml and zyvex parsers. Miss them and those formats vanish
+# from --list-formats on any machine lacking the library, which is invisible
+# on the build machine where system packages fill the gap.
+#
+# LD_LIBRARY_PATH lets ldd resolve the modules against the fresh build: the
+# executable has an explicit search path, the modules do not.
 {
   ldd "$BUILT_GWYCONVERT"
   find "$PREFIX/lib/gwyddion/modules" -name '*.so' \
     -exec env LD_LIBRARY_PATH="$PREFIX/lib" ldd {} \;
 } | awk '$2 == "=>" {print $1, $3}' | sort -u | while read -r name path; do
-  [[ -z "$path" ]] && continue          # vdso / the dynamic linker itself: no real file
+  [[ -z "$path" ]] && continue          # the kernel vdso and the loader: no file
   [[ "$name" =~ $EXCLUDE_RE ]] && continue
   cp -n "$path" "$BUNDLE_DIR/lib/"
 done
@@ -80,17 +80,25 @@ cat > "$BUNDLE_DIR/gwyconvert" <<'WRAPPER'
 # path compiled into libgwyddion. See bundle-linux.sh for the full story.
 here="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 export GWYDDION_LIBDIR="$here/lib"
-# Needed for the dlopen()'d modules' OWN dependencies (libxml2 and co.):
-# an executable's RUNPATH does not apply to libraries required by a
-# dlopen()'d object, so without this only libraries already loaded into the
-# process (the core Gwyddion/GTK ones) would resolve.
+# Needed for the loadable modules' own dependencies, such as libxml2. An
+# executable's library search path does not apply to libraries required by
+# a module it loads at run time, so without this only libraries already in
+# the process (the core Gwyddion and GTK ones) would resolve.
 export LD_LIBRARY_PATH="$here/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Keep stderr for real diagnostics. Otherwise GTK loads its accessibility
+# modules and GdkPixbuf hunts for a loader cache at a path baked in by the
+# build container, warning on every run including successful ones. Neither
+# is needed: gwyconvert draws nothing and the bundle ships no pixmap
+# module. Clearing both leaves the format list and every conversion
+# unchanged.
+export GTK_MODULES=""
+export GDK_PIXBUF_MODULE_FILE=/dev/null
 exec "$here/lib/gwyconvert.real" "$@"
 WRAPPER
 chmod +x "$BUNDLE_DIR/gwyconvert"
 
 echo "== Verifying the bundle is actually self-contained (env cleared) =="
-# `env -i` matters: it strips LD_LIBRARY_PATH/GWYDDION_LIBDIR so the check
-# exercises what an end user gets, not what the builder happens to have set.
+# `env -i` matters: it strips LD_LIBRARY_PATH and GWYDDION_LIBDIR, so the
+# check exercises what a user gets rather than what the builder has set.
 env -i "$BUNDLE_DIR/gwyconvert" --list-formats | python3 -c \
   "import json,sys; d=json.load(sys.stdin); assert len(d) > 100, d; print(f'bundle OK: {len(d)} formats')"

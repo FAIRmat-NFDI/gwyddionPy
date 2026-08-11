@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import gwyddionpy
-from conftest import make_gwy
+from helpers.gwy_builder import make_gwy
 
 
 def test_two_channels_full_fidelity(two_channel_gwy):

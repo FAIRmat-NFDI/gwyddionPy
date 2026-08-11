@@ -1,15 +1,9 @@
-"""Prebuilt gwyconvert binary bundle (GPL-2.0-or-later).
+"""Prebuilt gwyconvert binary bundle (GPL-2.0-or-later), shipped as wheel
+data so ``pip install "gwyddionpy[converter]"`` needs no build step.
 
-Ships the platform-specific gwyconvert bundle as wheel data, so
-``pip install "gwyddionpy[converter]"`` needs no separate download or build
-step. One wheel per platform: Linux x86_64, macOS arm64/x86_64, Windows
-x86_64.
-
-This is a separate distribution rather than part of gwyddionpy because
-gwyconvert links Gwyddion and is therefore GPL-2.0-or-later, while
-gwyddionpy stays Apache-2.0 — it only ever runs this binary as a
-subprocess. Keeping the GPL artifact behind an opt-in extra is what
-preserves that boundary. See the repository README for the full reasoning.
+A separate distribution because gwyconvert links Gwyddion and is therefore
+GPL, while gwyddionpy stays Apache-2.0 by only running it as a subprocess.
+https://github.com/FAIRmat-NFDI/gwyddionPy#license
 """
 from __future__ import annotations
 
@@ -17,11 +11,12 @@ from pathlib import Path
 
 _BIN_DIR = Path(__file__).parent / "bin"
 
-# Unix bundles ship a wrapper shell script named `gwyconvert`, which sets
-# GWYDDION_LIBDIR (and, on Linux, LD_LIBRARY_PATH) before exec-ing
-# lib/gwyconvert.real. Windows needs no such indirection — DLLs beside the
-# .exe are found by the loader — so it ships `gwyconvert.exe` directly.
-# These names come from ci/bundle-{linux,macos,windows}.sh; rename them
+# Linux and macOS bundles ship a wrapper shell script named `gwyconvert`,
+# which sets the library paths before exec-ing lib/gwyconvert.real. Windows
+# needs no wrapper, because the loader finds dynamic-link libraries (DLLs)
+# sitting beside the .exe, so it ships `gwyconvert.exe` directly.
+#
+# These names come from ci/bundle-{linux,macos,windows}.sh. Rename them
 # there and this tuple must follow.
 _CANDIDATES = ("gwyconvert", "gwyconvert.exe")
 

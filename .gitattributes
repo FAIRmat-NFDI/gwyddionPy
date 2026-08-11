@@ -1,0 +1,17 @@
+# Test specimens are byte-exact fixtures: each one's SHA-256 is recorded in
+# the registry and checked before the test that reads it, so that a file which
+# has been altered is caught rather than quietly producing a different
+# reading. Git must therefore never rewrite them.
+#
+# Several vendor formats are text-shaped — Nanonis .dat is ASCII throughout,
+# WSxM .top has a text header — so git's own heuristic treats them as text and
+# a Windows checkout with core.autocrlf converts every LF to CRLF. That
+# changes the bytes and the checksum no longer matches the file the reference
+# was captured from. Marking the directory binary pins the bytes on every
+# platform, and covers formats added later without anyone having to remember.
+gwyddionpy/tests/data/** binary
+
+# The captured references and notes beside the specimens are reviewed as text,
+# so keep them diffable — pinned to LF so they are identical everywhere.
+gwyddionpy/tests/data/**/*.json text eol=lf diff
+gwyddionpy/tests/data/README.md text eol=lf diff

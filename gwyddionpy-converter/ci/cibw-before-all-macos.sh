@@ -1,31 +1,37 @@
 #!/usr/bin/env bash
 # cibuildwheel `before-all` for macOS: install Gwyddion's build
-# dependencies via Homebrew, build Gwyddion + gwyconvert, and stage the
+# dependencies with Homebrew, build Gwyddion and gwyconvert, and stage the
 # bundle into the wheel's package data.
 #
-# Runs natively on whichever architecture the runner has — arm64 on
-# `macos-15`, x86_64 on `macos-15-intel`. Never a cross-build: Homebrew
-# ships bottles for the host architecture only, so an arm64 wheel built on
-# an Intel runner would have no arm64 GTK2/GLib/FFTW to link against. Both
-# architectures are covered by using two runners instead.
+# Runs natively on whichever architecture the runner has: arm64 on
+# `macos-15`, x86_64 on `macos-15-intel`. Never a cross-build, because
+# Homebrew ships bottles for the host architecture only, so an arm64 wheel
+# built on an Intel runner would have no arm64 libraries to link against.
+# Two runners cover both architectures instead.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "== Installing Gwyddion build dependencies (Homebrew) =="
-# `gtk+` is GTK2; GTK3 is `gtk+3` and GTK4 is `gtk4`. The name is a
-# historical artifact, and the wrong choice silently yields a toolkit
-# Gwyddion 2.x cannot build against.
-# https://formulae.brew.sh/formula/gtk+
-brew install gtk+ fftw libxml2 gettext pkg-config
+# `gtk+` is GTK2; GTK3 is `gtk+3` and GTK4 is `gtk4`. The naming is
+# historical, and the wrong choice quietly yields a toolkit Gwyddion 2.x
+# cannot build against. https://formulae.brew.sh/formula/gtk+
+#
+# `libzip` gives Gwyddion its zip-container readers. Without it, configure
+# reports no zip library and silently builds eight fewer file modules:
+# apedaxfile, nanoobserver, nanoscantech, opengps, scnxfile, sensofarx,
+# spmxfile and zonfile. Installed explicitly because assuming it was
+# already present is what shipped arm64 and x86_64 wheels that could read
+# different numbers of formats.
+brew install gtk+ fftw libxml2 libzip gettext pkg-config
 
-# Homebrew's keg-only libraries are off the default search paths — and on
-# Apple Silicon so is $BREW_PREFIX itself, since /opt/homebrew is not a
+# Homebrew's keg-only libraries are off the default search paths, and on
+# Apple Silicon so is the Homebrew prefix itself: /opt/homebrew is not a
 # compiler default the way Intel's /usr/local is. PKG_CONFIG_PATH alone is
-# therefore not enough on arm64: parts of Gwyddion's configure and build
-# look for headers (fftw3.h among them) through plain CPPFLAGS compiles
-# rather than pkg-config, and fail with "fftw3.h file not found".
+# therefore not enough on arm64, because parts of Gwyddion's configure look
+# for headers such as fftw3.h through plain compiles rather than
+# pkg-config, and fail with "fftw3.h file not found".
 BREW_PREFIX="$(brew --prefix)"
 export PKG_CONFIG_PATH="$BREW_PREFIX/lib/pkgconfig:$BREW_PREFIX/opt/libxml2/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 export CPPFLAGS="-I$BREW_PREFIX/include -I$BREW_PREFIX/opt/libxml2/include ${CPPFLAGS:-}"

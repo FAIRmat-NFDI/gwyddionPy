@@ -2,17 +2,15 @@ name: pytest
 
 on:
   push:
-    branches: [main, "*"]
-  # pull_request:
-  #   branches: [main]
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  # Two independent jobs (no `needs:` between them) covering the two ways a
-  # developer can obtain gwyconvert. Both are kept: pytest-source-tarball
-  # exercises the recipe released artifacts are built from
-  # (gwyddionpy-converter/ci/build-gwyddion.sh), while pytest-system-package
-  # exercises the distro-package route contributors actually reach for
-  # locally, which nothing else would catch if it broke.
+  # Two independent jobs covering the two ways to obtain gwyconvert.
+  # pytest-source-tarball exercises the recipe released artifacts are built
+  # from; pytest-system-package exercises the distribution-package route
+  # contributors reach for locally, which nothing else would catch.
 
   pytest-system-package:
     name: pytest (system Gwyddion package)
@@ -25,17 +23,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # `gwyddion` itself is required, not just libgwyddion20-dev: Debian
-      # and Ubuntu ship the file-format module plugins (~170 .so files that
-      # gwyconvert dlopen()s at runtime) in the `gwyddion` binary package,
-      # while the -dev package carries only headers and link libraries.
-      # Omit it and gwyconvert builds, links and runs — reporting zero
-      # formats. Keep this list in sync with docs/user/how-to.md.
+      # `gwyddion` itself is required, not just libgwyddion20-dev. Debian
+      # and Ubuntu ship the file-format plugins that gwyconvert loads at
+      # run time in the `gwyddion` package, while the -dev package carries
+      # only headers and link libraries. Omit it and gwyconvert builds,
+      # links, runs and reports zero formats.
+      # Keep this list in step with docs/user/how-to.md.
       - name: Install Gwyddion (system package)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libgwyddion20-dev gwyddion libgtk2.0-dev libfftw3-dev pkg-config build-essential
+
+      # This job is the one place that deliberately does NOT use the pinned
+      # Gwyddion from [tool.gwyconvert] in gwyddionpy-converter/pyproject.toml.
+      # Its whole purpose is the distribution-package route, so it has to
+      # test whatever Gwyddion the distribution ships: apt cannot install
+      # the pinned release, which is not in the archive, and building it
+      # from source here would make this job a copy of
+      # pytest-source-tarball. Every other job — the wheels, the release
+      # tarball, pytest-source-tarball — uses the pin.
+      #
+      # So the version is recorded rather than pinned, and a floor guards
+      # the bottom. Gwyddion 2.60 reports 163 file formats, under the >= 170
+      # the suite asserts, so an image that far back would fail later and
+      # far less legibly than it does here.
+      - name: Record the system Gwyddion version
+        run: |
+          MINIMUM=2.61
+          SYSTEM="$(dpkg-query -W -f='${Version}' gwyddion)"
+          PINNED="$(gwyddionpy-converter/ci/gwyddion-version.sh)"
+          echo "system package: gwyddion $SYSTEM"
+          echo "built from source elsewhere: gwyddion $PINNED"
+          echo "gwyddion $SYSTEM (system package; source builds pin $PINNED)" \
+            >> "$GITHUB_STEP_SUMMARY"
+          # dpkg's own comparison, so epochs and -1build3 suffixes order the
+          # way the archive means them to.
+          if ! dpkg --compare-versions "$SYSTEM" ge "$MINIMUM"; then
+            echo "::error::the packaged Gwyddion is $SYSTEM, below the $MINIMUM floor this job requires" >&2
+            exit 1
+          fi
+
+      # The locale tests show the reader is independent of the machine's
+      # number formatting, and need a comma-decimal locale to compare
+      # against. The runner image ships only C and English ones, so one is
+      # generated here rather than letting the tests skip.
+      - name: Generate a comma-decimal locale
+        run: |
+          sudo apt-get install -y locales
+          sudo locale-gen de_DE.UTF-8
 
       - name: Build gwyconvert
         run: |
@@ -53,6 +89,10 @@ jobs:
       - name: Test with pytest
         env:
           GWYDDIONPY_CONVERT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
+          # Declares which platform this leg is. A job that ends up on the
+          # wrong image stops with an error instead of reporting a green run
+          # for a platform it never tested.
+          GWYDDIONPY_REQUIRE_PLATFORM: linux
         run: pytest gwyddionpy/tests
 
   pytest-source-tarball:
@@ -66,17 +106,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Build dependencies only — Gwyddion itself is built from its official
+      # Build dependencies only. Gwyddion itself is built from its official
       # source tarball by ci/build-gwyddion.sh, the same script
-      # build-converter.yml uses. Testing against that rather than the
-      # distro package means this job matches what actually ships, and does
-      # not depend on how a distribution happens to split its Gwyddion
-      # packages (the exact assumption the job above documents).
+      # build-converter.yml uses, so this job matches what actually ships
+      # and does not depend on how a distribution splits its packages.
       - name: Install build dependencies for Gwyddion
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential pkg-config curl libgtk2.0-dev libfftw3-dev libxml2-dev gettext
+
+      # See the note in pytest-system-package: the locale tests need a
+      # comma-decimal locale to exist before they can demonstrate anything.
+      - name: Generate a comma-decimal locale
+        run: |
+          sudo apt-get install -y locales
+          sudo locale-gen de_DE.UTF-8
 
       - name: Build Gwyddion + gwyconvert from source
         env:
@@ -96,4 +141,119 @@ jobs:
       - name: Test with pytest
         env:
           GWYDDIONPY_CONVERT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
+          # Declares which platform this leg is. A job that ends up on the
+          # wrong image stops with an error instead of reporting a green run
+          # for a platform it never tested.
+          GWYDDIONPY_REQUIRE_PLATFORM: linux
         run: pytest gwyddionpy/tests
+
+  # ---------------------------------------------------------------------
+  # The converter this branch builds, on every platform it is built for.
+  #
+  # The wheels are built here rather than installed from the index. An
+  # installed one would be the last release, so a change to gwyconvert.c or
+  # to a build recipe could not be checked until after it had shipped.
+  # Building here makes this a gate on the change under review.
+  #
+  # The build is the one in build-converter.yml, called rather than copied,
+  # so releases and tests cannot diverge.
+  # ---------------------------------------------------------------------
+  build-converter:
+    name: Build the converter wheels
+    # Empty tag: this is a test build, so the wheels are the throwaway
+    # 0.0.0 and the release-upload step inside stays switched off.
+    uses: ./.github/workflows/build-converter.yml
+    with:
+      tag: ""
+
+  pytest-built-wheel:
+    name: pytest (built wheel, ${{ matrix.platform }})
+    needs: build-converter
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-15
+            platform: macos
+          - os: macos-15-intel
+            platform: macos
+          - os: windows-latest
+            platform: windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # A comma-decimal locale is generated on Linux because the locale
+      # tests prove independence from it, and cannot do so if none exists.
+      #
+      # Nothing is generated for the other two, for different reasons.
+      # Windows ignores LC_ALL, so those tests skip there by design and the
+      # guarantee is covered instead by gwyconvert's own setlocale call.
+      # macOS ships the candidates in tests/converter/test_locale.py
+      # already, so the tests run on an image-provided locale rather than
+      # one this job created — an undeclared dependency on the image, but a
+      # loud one: the fixture calls pytest.fail, never skip, if no
+      # comma-decimal locale can be found.
+      - name: Generate a comma-decimal locale (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y locales
+          sudo locale-gen de_DE.UTF-8
+
+      - name: Collect the wheel built for this platform
+        uses: actions/download-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}
+          path: wheelhouse
+
+      # A second, independently built converter, so
+      # test_build_consistency.py's two-build comparison runs instead of
+      # skipping — eight tests that had never executed anywhere. It is the
+      # tarball from build-converter.yml's `linux` job: same sources, other
+      # container and toolchain, which is the difference worth comparing.
+      #
+      # Linux only, because that job builds a tarball for no other platform.
+      # This sets no GWYDDIONPY_CONVERT, so the converter under test is
+      # still the installed wheel and the tarball is only ever the second
+      # opinion.
+      - name: Collect the independently built tarball (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/download-artifact@v4
+        with:
+          name: gwyconvert-tarball-linux-x86_64
+          path: alt-converter
+
+      - name: Offer it to the suite as a second build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          tar xzf alt-converter/gwyconvert-linux-x86_64.tar.gz -C alt-converter
+          echo "GWYDDIONPY_ALT_CONVERT=$PWD/alt-converter/gwyconvert" >> "$GITHUB_ENV"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      # Installed into the environment setup-uv created and put on PATH, as
+      # the other jobs do. Not --system, which would target the interpreter
+      # the image ships: on Ubuntu that is externally managed and refuses
+      # the install, and on macOS it lands somewhere pytest is not found.
+      #
+      # Named by path rather than as a requirement, because a test build
+      # carries the throwaway version 0.0.0 and naming the file is what
+      # guarantees the wheel under test is the one just built.
+      - name: Install gwyddionpy and the converter wheel built here
+        shell: bash
+        run: |
+          uv pip install wheelhouse/*.whl
+          uv pip install "./gwyddionpy[test]"
+
+      - name: Test with pytest
+        shell: bash
+        env:
+          GWYDDIONPY_REQUIRE_PLATFORM: ${{ matrix.platform }}
+        run: pytest gwyddionpy/tests gwyddionpy-converter/tests

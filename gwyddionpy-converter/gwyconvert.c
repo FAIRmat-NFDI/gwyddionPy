@@ -1,21 +1,23 @@
 /*
- * gwyconvert — headless converter from any Gwyddion-supported SPM raw file
- * to Gwyddion's native .gwy format.
+ * gwyconvert — headless converter from any raw scanning probe microscopy
+ * (SPM) file Gwyddion supports into Gwyddion's native .gwy format.
  *
  * Usage:
  *   gwyconvert INPUT OUTPUT.gwy    convert a raw file
  *   gwyconvert --list-formats      print registered file formats as JSON
  *
- * On successful conversion a single JSON object is printed on stdout:
+ * A successful conversion prints one JSON object on stdout:
  *   {"module": "<name of the file module that parsed the input>"}
- * All diagnostics go to stderr.  Exit codes: 0 success, 1 conversion
- * failure, 2 bad invocation.
+ * Diagnostics go to stderr.  Exit codes: 0 success, 1 conversion failure,
+ * 2 bad invocation.  Full description: docs/user/gwyconvert-cli.md
  *
- * Initialization sequence follows gwyddion/thumbnailer/gwyddion-thumbnailer.c,
- * the reference for headless (no display) file loading.
+ * The initialization sequence follows Gwyddion's own
+ * thumbnailer/gwyddion-thumbnailer.c, the reference for loading a file
+ * with no display attached.
  *
  * License: GPL-2.0-or-later (links Gwyddion libraries).
  */
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,17 +28,43 @@
 #include <libgwymodule/gwymodule-file.h>
 #include <app/settings.h>
 
-/* Declared in <libgwydgets/gwydgets.h>, which cannot be included here:
- * that umbrella header pulls in gtkglext (gdk/gdkgl.h), whose development
- * files Ubuntu's libgwyddion20-dev does not depend on.  The symbol itself
- * lives in libgwydgets2, which we link anyway. */
+/* Declared in <libgwydgets/gwydgets.h>, which cannot be included here: that
+ * umbrella header pulls in gtkglext, whose development files Ubuntu's
+ * libgwyddion20-dev does not depend on.  The symbol lives in libgwydgets2,
+ * which is linked anyway. */
 void gwy_widgets_type_init(void);
+
+/* Registering modules loads every file module on the system, and any of them
+ * may warn while doing so.  Against a distribution's Gwyddion that is
+ * routine rather than a fault: pixmap.so registers png and jpeg itself and
+ * also enumerates GdkPixbuf's formats, which now have those loaders built
+ * in, so Gwyddion reports
+ *
+ *     GwyModule-WARNING **: Duplicate function png, keeping only first
+ *
+ * keeps the first and carries on.  No environment variable reaches it, and
+ * it lands on stderr on every run, successful ones included, where
+ * gwyddionpy would quote it back in its own error messages.
+ *
+ * So warnings are discarded for the duration of registration only.  Nothing
+ * diagnostic is lost: --list-formats reports what actually registered,
+ * CRITICAL and ERROR still get through, and anything emitted once a
+ * conversion starts is untouched. */
+static void
+discard_registration_warning(const gchar *domain, GLogLevelFlags level,
+                             const gchar *message, gpointer user_data)
+{
+    (void)user_data;
+    if (level & (G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL))
+        g_log_default_handler(domain, level, message, NULL);
+}
 
 static void
 init_gwyddion(void)
 {
     const gchar *const module_types[] = { "file", NULL };
     GPtrArray *module_dirs;
+    GLogFunc previous_handler;
     gchar *p, *q;
     guint i;
 
@@ -55,7 +83,10 @@ init_gwyddion(void)
         g_ptr_array_add(module_dirs, g_build_filename(q, module_types[i], NULL));
 
     g_ptr_array_add(module_dirs, NULL);
+    previous_handler = g_log_set_default_handler(discard_registration_warning,
+                                                 NULL);
     gwy_module_register_modules((const gchar**)module_dirs->pdata);
+    g_log_set_default_handler(previous_handler, NULL);
 
     for (i = 0; module_dirs->pdata[i]; i++)
         g_free(module_dirs->pdata[i]);
@@ -154,8 +185,33 @@ convert(const gchar *input, const gchar *output)
 int
 main(int argc, char *argv[])
 {
-    /* Initializes GTK type machinery without requiring a display. */
+#ifdef G_OS_WIN32
+    /* Windows hands main() its arguments in the process code page, so a path
+     * with characters outside it, such as "Ångström-messungen", arrives
+     * already mangled and cannot be opened.  g_win32_get_command_line()
+     * returns the real command line as UTF-8, which is what GLib's file
+     * functions and Gwyddion expect everywhere.  Freed by exiting. */
+    gchar **utf8_argv = g_win32_get_command_line();
+
+    argv = utf8_argv;
+    argc = (int)g_strv_length(utf8_argv);
+#endif
+
+    /* Initializes the GTK type machinery without needing a display. */
     gtk_parse_args(&argc, &argv);
+
+    /* gtk_parse_args() has just called setlocale(LC_ALL, ""), which adopts
+     * the machine's number formatting.  The same measurement would then
+     * report a duty cycle of "0,881" on a German-configured machine and
+     * "0.881" on an English one.
+     *
+     * gwyddionpy also sets LC_NUMERIC=C in the environment it supplies, but
+     * that only works where the C runtime reads the environment; on Windows
+     * it reads the operating system locale instead.  Pinning it here works
+     * on every platform and however the process was launched.  Only the
+     * numeric category is touched, so the µm and °C that fill this metadata
+     * keep their encoding. */
+    setlocale(LC_NUMERIC, "C");
 
     if (argc == 2 && gwy_strequal(argv[1], "--list-formats")) {
         init_gwyddion();

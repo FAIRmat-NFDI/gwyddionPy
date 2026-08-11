@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # cibuildwheel `before-all` for Linux: install Gwyddion's build
-# dependencies, build Gwyddion + gwyconvert, and stage the bundle into the
-# wheel's package data.
+# dependencies, build Gwyddion and gwyconvert, and stage the bundle into
+# the wheel's package data.
 #
 # Runs once inside the manylinux container before any wheel is built, with
-# the copied project root as CWD — so writing into
-# src/gwyddionpy_converter/bin/ is exactly what the following setup.py
-# build picks up as package data.
+# the copied project root as the working directory, so writing into
+# src/gwyddionpy_converter/bin/ is what the following setup.py build picks
+# up as package data.
 #
 # The bundle is assembled here rather than in `repair-wheel-command`
 # because auditwheel walks a binary's build-time link graph, which never
-# reaches Gwyddion's dlopen()'d format plugins or their dependencies.
-# bundle-linux.sh handles those, and its output is already self-contained
-# and RPATH-patched, so pyproject.toml reduces repair to a plain copy.
+# reaches Gwyddion's loadable format plugins or their dependencies.
+# bundle-linux.sh handles those and its output is already self-contained,
+# so pyproject.toml reduces repair to a plain copy.
 #
-# The dnf lines mirror the Rocky Linux 8 recipe in build-converter.yml, and
-# transfer because the manylinux_2_28 image is AlmaLinux 8: same RHEL 8
-# family, same glibc floor, same package names. Change one, change both.
-# Repo layout: fftw-devel is in PowerTools (CRB), patchelf in EPEL.
+# The dnf lines mirror the Rocky Linux 8 recipe in build-converter.yml.
+# They transfer because the manylinux_2_28 image is AlmaLinux 8: same
+# family, same C library floor, same package names. Change one, change
+# both. fftw-devel is in the PowerTools/CRB repository, patchelf in EPEL.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,9 +36,9 @@ dnf -y install \
   python3 patchelf gawk file findutils diffutils \
   gtk2-devel fftw-devel libxml2-devel gettext
 
-# gcc-toolset-12 is required, not optional: EL8's default GCC 8.5 rejects
-# Gwyddion 2.71's OpenMP shared() clauses ("predetermined 'shared'"); the
-# toolset compiler still targets glibc 2.28.
+# gcc-toolset-12 is required, not optional: the image's default GCC 8.5
+# rejects Gwyddion 2.71's OpenMP shared() clauses. The toolset compiler
+# still targets the same C library baseline.
 # shellcheck disable=SC1091
 source /opt/rh/gcc-toolset-12/enable
 

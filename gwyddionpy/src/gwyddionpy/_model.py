@@ -29,9 +29,8 @@ class GwyData:
 
     @property
     def metadata(self) -> Dict[str, str]:
-        """Union of per-channel metadata; on key collisions the first
-        channel (in file order) wins. Per-channel values stay in
-        ``channel.meta``."""
+        """Union of per-channel metadata. On a key clash the first channel
+        in file order wins; per-channel values stay in ``channel.meta``."""
         merged: Dict[str, str] = {}
         for channel in self.channels.values():
             for key, value in channel.meta.items():
@@ -39,26 +38,39 @@ class GwyData:
         return merged
 
     def to_hdf5(self, path, **kwargs) -> None:
-        """Write channels + metadata to a plain HDF5 file (needs h5py).
+        """Write channels and metadata to a plain HDF5 file. Needs h5py.
 
-        Vendor metadata keys are unfolded into nested groups by default;
-        pass ``hierarchical_meta=False`` for flat attributes."""
-        from .export.hdf5 import write
+        Metadata keys unfold into nested groups by default. Pass
+        ``hierarchical_meta=False`` for flat attributes instead.
+        """
+        from gwyddionpy.export.hdf5 import write
 
         write(self, path, **kwargs)
 
     def to_gwy(self, path) -> None:
-        """Write a Gwyddion-native .gwy file (opens in the Gwyddion GUI)."""
-        from .export.gwy import write
+        """Write a Gwyddion-native .gwy file, which opens in Gwyddion."""
+        from gwyddionpy.export.gwy import write
 
         write(self, path)
 
+    def to_json(self, path, **kwargs) -> None:
+        """Write channel metadata to a JSON file. Carries no pixel data.
+
+        The layout of ``to_dict``, with each channel's ``data`` array
+        replaced by its ``shape``. Metadata keys unfold into nested objects
+        by default; pass ``hierarchical_meta=False`` for the flat vendor
+        keys instead.
+        """
+        from gwyddionpy.export.json import write
+
+        write(self, path, **kwargs)
+
     def to_dict(self, hierarchical_meta: bool = True) -> dict:
-        """Return channels + metadata as a plain Python dict (no file I/O),
-        structurally mirroring ``to_hdf5``: same channel fields, same
-        sanitized-name keying, same vendor-metadata grouping. This is the
-        shape downstream readers such as pynxtools-spm consume, so keep it
-        and ``export/hdf5.py`` in step."""
-        from .export.dict import to_dict
+        """Return channels and metadata as a plain dict, with no file I/O.
+
+        Structurally mirrors ``to_hdf5``. Downstream readers such as
+        pynxtools-spm consume this shape, so keep the two in step.
+        """
+        from gwyddionpy.export.dict import to_dict
 
         return to_dict(self, hierarchical_meta=hierarchical_meta)

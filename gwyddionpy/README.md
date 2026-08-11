@@ -1,8 +1,9 @@
 # gwyddionpy
 
-Read any Gwyddion-supported SPM raw file (~170 vendor formats) into Python:
-NumPy arrays plus metadata dictionaries. Pure Python — the file parsing is
-done by the `gwyconvert` helper binary, which is run as a subprocess.
+Read any raw scanning probe microscopy (SPM) file that Gwyddion supports —
+around 170 vendor formats — into Python as NumPy arrays plus metadata
+dictionaries. Pure Python: the parsing is done by the `gwyconvert` helper
+binary, run as a subprocess.
 
 ```python
 import gwyddionpy
@@ -10,6 +11,7 @@ import gwyddionpy
 data = gwyddionpy.load("scan.spm")
 data.channels["Height"].data      # numpy array, physical values
 data.metadata                     # vendor metadata
+data.to_json("scan.json")         # metadata only, no pixel data
 data.to_hdf5("scan.h5")           # optional: pip install 'gwyddionpy[hdf5]'
 ```
 

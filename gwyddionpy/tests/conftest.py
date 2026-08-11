@@ -1,36 +1,79 @@
-"""Shared fixtures. Fixtures build real .gwy files with the gwyfile writer —
-no mocks: the same library that parses production files parses these."""
+"""Fixtures shared across the suite, which needs the gwyconvert from the
+installed converter package.
+
+  unit/  built inputs   converter/  finding and running the binary
+  data/  vendor files   formats/    reading those files
+                        helpers/    registry, schema, fixture builders
+"""
 import numpy as np
 import pytest
-from gwyfile.objects import GwyContainer, GwyDataField, GwySIUnit
+
+from helpers import platforms
+from helpers.gwy_builder import make_gwy
 
 
-def make_gwy(path, channels):
-    """Write a .gwy file. channels: list of dicts with keys
-    name, data, xreal, yreal, unit_xy, unit_z, meta (all optional but data)."""
-    container = GwyContainer()
-    for num, spec in enumerate(channels):
-        field = GwyDataField(
-            np.asarray(spec["data"], dtype="f8"),
-            xreal=spec.get("xreal", 1.0),
-            yreal=spec.get("yreal", 1.0),
-            si_unit_xy=(
-                GwySIUnit(unitstr=spec["unit_xy"]) if "unit_xy" in spec else None
-            ),
-            si_unit_z=(
-                GwySIUnit(unitstr=spec["unit_z"]) if "unit_z" in spec else None
-            ),
+def pytest_addoption(parser):
+    parser.addoption(
+        "--require-platform", action="store", default="", metavar="NAME",
+        help=("declare which platform this run is meant to be (linux, macos, "
+              "windows). Running anywhere else then stops the run instead of "
+              "quietly passing. Also settable as "
+              f"{platforms.REQUIRE_ENV_VAR}."),
+    )
+
+
+def declared_platform(config):
+    """The platform this run says it is, or None if it did not say."""
+    declared = config.getoption("--require-platform") or ""
+    try:
+        return (platforms.normalize(declared) if declared
+                else platforms.required())
+    except ValueError as error:
+        raise pytest.UsageError(str(error)) from error
+
+
+def pytest_collection_modifyitems(config, items):
+    """Leave the cross-platform tests out unless a platform was declared.
+
+    They only mean something on a known, controlled platform. Each CI leg
+    declares itself, so they run there.
+    """
+    if declared_platform(config) is not None:
+        return
+    skip = pytest.mark.skip(
+        reason=("cross-platform test: pass --require-platform (or set "
+                f"{platforms.REQUIRE_ENV_VAR}) to run it")
+    )
+    for item in items:
+        if item.get_closest_marker("platform") is not None:
+            item.add_marker(skip)
+
+
+def pytest_configure(config):
+    """Stop immediately if this run is not the platform it claims to be.
+
+    A changed image or a `runs-on` typo produces a green run that tested the
+    wrong system, and nothing in the output would show it.
+    """
+    expected = declared_platform(config)
+    if expected is None:
+        return
+
+    actual = platforms.current()
+    if actual != expected:
+        raise pytest.UsageError(
+            f"this run was told it is the {expected} leg but it is running on "
+            f"{platforms.describe()}. Either the declaration is wrong or the "
+            f"job is running on the wrong image; nothing here would have "
+            f"tested {expected}."
         )
-        container[f"/{num}/data"] = field
-        if "name" in spec:
-            container[f"/{num}/data/title"] = spec["name"]
-        if "meta" in spec:
-            meta = GwyContainer()
-            for key, value in spec["meta"].items():
-                meta[key] = value
-            container[f"/{num}/meta"] = meta
-    container.tofile(str(path))
-    return path
+
+
+@pytest.fixture(scope="session")
+def required_platform(pytestconfig):
+    """The platform this run declared, by either route, so a test never has
+    to know whether the option or the environment variable was used."""
+    return declared_platform(pytestconfig)
 
 
 @pytest.fixture

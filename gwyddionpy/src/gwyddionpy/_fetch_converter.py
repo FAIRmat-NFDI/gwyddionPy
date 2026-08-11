@@ -1,21 +1,9 @@
 """Download a prebuilt gwyconvert binary from a GitHub Release.
 
-An alternative to ``pip install "gwyddionpy[converter]"`` for anyone who
-wants the binary without adding a GPL package to their environment. The
-tarball is built by .github/workflows/build-converter.yml's `linux` job and
-attached to the release as ``gwyconvert-<os>-<arch>.tar.gz``, with a
-sibling ``.sha256``; releases carry the same tag as the Python package, so
-version resolution needs nothing but the installed version. Only
-linux-x86_64 is published this way — the other platforms ship as wheels.
-
-User-triggered, always: this runs only from an explicit
-``gwyddionpy.ensure_converter()`` call or the ``gwyddionpy-fetch-converter``
-console script — never on import, never from a pip install hook. It touches
-no package manager and needs no privileges; it is an HTTPS download,
-checksum check and extract.
-
-The module itself is plain Apache-2.0 Python containing no GPL code; what
-it downloads is the GPL-2.0-or-later artifact.
+**Deprecated**, and to be removed: installing ``gwyddionpy[converter]`` is
+the supported route. Kept for anyone wanting the binary without a GPL
+package in their environment (linux-x86_64 only). Runs only from
+``ensure_converter()`` or ``gwyddionpy-fetch-converter``, never on import.
 """
 from __future__ import annotations
 
@@ -28,17 +16,27 @@ import tarfile
 import tempfile
 import urllib.error
 import urllib.request
+import warnings
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Optional
 
 from platformdirs import user_cache_dir
 
-from ._errors import ConverterFetchError
+from gwyddionpy._errors import ConverterFetchError
+
+#: Shown once per call rather than at import, so having gwyddionpy
+#: installed does not nag anyone who never uses this route.
+_DEPRECATION = (
+    "gwyddionpy.ensure_converter() and the gwyddionpy-fetch-converter "
+    "command are deprecated and will be removed in a future release. "
+    "Install the converter as a wheel instead: "
+    'pip install "gwyddionpy[converter]".'
+)
 
 GITHUB_REPO = "FAIRmat-NFDI/gwyddionPy"
-# Override for testing (tests/test_fetch_converter.py points it at a local
-# HTTP server) or for a self-hosted mirror.
+# Points the download somewhere else: a self-hosted mirror, or a local
+# server standing in for the release host during tests.
 BASE_URL_ENV_VAR = "GWYDDIONPY_CONVERTER_BASE_URL"
 
 _SYSTEM_NAMES = {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}
@@ -54,8 +52,9 @@ def _platform_tag() -> str:
     if system is None or machine is None:
         raise ConverterFetchError(
             f"no prebuilt gwyconvert for {platform.system()}/{platform.machine()} "
-            "— install `gwyddionpy[converter]` or build it yourself "
-            "(docs/user/how-to.md)"
+            "— install `gwyddionpy[converter]`, or build it yourself: "
+            "https://github.com/FAIRmat-NFDI/gwyddionPy/blob/main/docs/user/"
+            "how-to.md"
         )
     return f"{system}-{machine}"
 
@@ -67,13 +66,9 @@ def _asset_name() -> str:
 
 
 def _release_tag() -> str:
-    """The GitHub Release tag to fetch from: the installed package's own
-    version, or "latest" for dev and editable installs, whose versions
-    correspond to no release.
-
-    Release tags are "v"-prefixed (v0.0.1) while setuptools-scm versions are
-    not (0.0.1), so the "v" is added back here. publish.yml strips it in the
-    other direction when pinning the converter.
+    """The release tag to fetch from: the installed version, or "latest" for
+    development installs, which match no release. Tags carry a leading "v"
+    while setuptools-scm versions do not, so it is added back here.
     """
     try:
         installed = version("gwyddionpy")
@@ -98,10 +93,17 @@ def converter_cache_dir() -> Path:
     return Path(user_cache_dir("gwyddionpy")) / "converter"
 
 
+def _cached_binary_name() -> str:
+    """What the binary is called in the tarball, and so in the cache.
+
+    Must match the name ci/bundle-{linux,macos,windows}.sh gives it.
+    """
+    return "gwyconvert.exe" if platform.system() == "Windows" else "gwyconvert"
+
+
 def cached_converter_path() -> Optional[Path]:
     """The cached gwyconvert binary's path, if one was already fetched."""
-    binary_name = "gwyconvert.exe" if platform.system() == "Windows" else "gwyconvert"
-    candidate = converter_cache_dir() / binary_name
+    candidate = converter_cache_dir() / _cached_binary_name()
     return candidate if candidate.is_file() else None
 
 
@@ -134,11 +136,10 @@ def _sha256_of(path: Path) -> str:
 
 
 def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
-    """Extract, rejecting members that would escape ``dest`` or are links.
+    """Extract, rejecting members that are links or escape ``dest``.
 
-    Plain ``extractall()`` writes both as-is, which is the CVE-2007-4559
-    path-traversal class. Python 3.12's ``filter="data"`` does this for us,
-    but the package supports 3.9, so the check is written out here.
+    Plain ``extractall()`` writes both as given (CVE-2007-4559). Python
+    3.12's ``filter="data"`` would do this, but the package supports 3.9.
     https://docs.python.org/3/library/tarfile.html#extraction-filters
     """
     dest = dest.resolve()
@@ -152,13 +153,13 @@ def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
 
 
 def ensure_converter(*, force: bool = False) -> Path:
-    """Download the prebuilt gwyconvert for this platform, verify its
-    checksum, cache it locally, and return its path.
+    """Download gwyconvert for this platform, verify it, cache it, and
+    return its path. Returns an already-cached binary unless ``force=True``.
 
-    Returns an already-cached binary immediately unless ``force=True``.
-    Call this explicitly (or run ``gwyddionpy-fetch-converter``): it never
-    runs on import or as a side effect of ``pip install``.
+    .. deprecated:: Install ``gwyddionpy[converter]`` instead.
     """
+    warnings.warn(_DEPRECATION, DeprecationWarning, stacklevel=2)
+
     cached = cached_converter_path()
     if cached is not None and not force:
         return cached
@@ -200,12 +201,18 @@ def _main(argv: Optional[list] = None) -> None:
     parser = argparse.ArgumentParser(
         prog="gwyddionpy-fetch-converter",
         description="Download the prebuilt gwyconvert binary for this platform "
-        "(GPL-2.0-or-later, fetched separately from the gwyddionpy package).",
+        "(GPL-2.0-or-later, fetched separately from the gwyddionpy package). "
+        "Deprecated: install gwyddionpy[converter] instead; this command will "
+        "be removed in a future release.",
     )
     parser.add_argument(
         "--force", action="store_true", help="re-download even if already cached"
     )
     args = parser.parse_args(argv)
+
+    # DeprecationWarning is invisible in a console script by default, so the
+    # notice is printed where the person running it will see it.
+    print(f"warning: {_DEPRECATION}", file=sys.stderr)
 
     try:
         path = ensure_converter(force=args.force)

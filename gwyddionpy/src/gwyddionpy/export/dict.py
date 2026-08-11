@@ -1,16 +1,14 @@
-"""Return GwyData as a plain Python dict, mirroring the HDF5 export layout.
+"""Return GwyData as a plain Python dict. No file I/O, no dependencies.
 
-Structure: ``{"source_format": ..., "channels": {<sanitized name>: {"name":
-<original name>, "xreal", "yreal", "si_unit_xy", "si_unit_z", "data":
-ndarray, "meta": <tree>}}}`` — same fields, same sanitized-name keying
-("/" replaced by "_") and the same vendor-metadata grouping as
-``export/hdf5.py`` (see ``gwyddionpy._metatree``): nested dicts for
-groups, a plain value for a unitless leaf, and ``{"value", "unit"}`` for a
-leaf with a parsed unit. No file I/O, no extra dependencies.
+``{"source_format": ..., "channels": {<sanitized name>: {"name", "xreal",
+"yreal", "si_unit_xy", "si_unit_z", "data", "meta"}}}``, where a metadata
+leaf is a plain value or ``{"value", "unit"}``. Mirrors ``export/hdf5.py``
+field for field, so change either and check the other.
 """
 from __future__ import annotations
 
-from .._metatree import MetaLeaf, build_tree
+from gwyddionpy._metatree import MetaLeaf, build_tree
+from gwyddionpy.export import channel_keys
 
 
 def _tree_to_plain(tree):
@@ -25,12 +23,13 @@ def _tree_to_plain(tree):
 
 
 def to_dict(data, hierarchical_meta: bool = True) -> dict:
+    # Sanitized the same way as in the HDF5 export, so both lay channels out
+    # identically. The original name is kept in the "name" field below.
+    keys = channel_keys(data.channels)
     return {
         "source_format": data.source_format,
         "channels": {
-            # "/" is HDF5's path separator; sanitized here too so both
-            # exports key channels identically (original name kept below).
-            name.replace("/", "_"): {
+            keys[name]: {
                 "name": name,
                 "xreal": channel.xreal,
                 "yreal": channel.yreal,
