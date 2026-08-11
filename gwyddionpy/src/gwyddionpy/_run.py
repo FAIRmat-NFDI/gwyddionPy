@@ -12,7 +12,11 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from ._errors import ConversionError, ConverterNotFoundError, UnsupportedFormatError
+from gwyddionpy._errors import (
+    ConversionError,
+    ConverterNotFoundError,
+    UnsupportedFormatError,
+)
 
 ENV_VAR = "GWYDDIONPY_CONVERT"
 BINARY_NAME = "gwyconvert"
@@ -115,7 +119,7 @@ def find_converter(explicit: Optional[str] = None) -> str:
     except (ImportError, FileNotFoundError):
         pass
 
-    from ._fetch_converter import cached_converter_path
+    from gwyddionpy._fetch_converter import cached_converter_path
 
     cached = cached_converter_path()
     if cached is not None:

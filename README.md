@@ -12,6 +12,7 @@ data = gwyddionpy.load("scan.spm")         # Bruker, JPK, WSxM, Igor, ...
 data.channels["Height"].data              # numpy array, physical values
 data.channels["Height"].si_unit_z         # "m"
 data.metadata                             # vendor metadata dict
+data.to_json("scan.json")                 # metadata only, no pixel data
 data.to_hdf5("scan.h5")                   # hierarchical HDF5 export
 data.to_gwy("scan.gwy")                   # back to Gwyddion-native format
 ```

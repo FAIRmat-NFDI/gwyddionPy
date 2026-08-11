@@ -7,8 +7,8 @@ field for field, so change either and check the other.
 """
 from __future__ import annotations
 
-from .._metatree import MetaLeaf, build_tree
-from . import channel_keys
+from gwyddionpy._metatree import MetaLeaf, build_tree
+from gwyddionpy.export import channel_keys
 
 
 def _tree_to_plain(tree):

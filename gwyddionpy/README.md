@@ -11,6 +11,7 @@ import gwyddionpy
 data = gwyddionpy.load("scan.spm")
 data.channels["Height"].data      # numpy array, physical values
 data.metadata                     # vendor metadata
+data.to_json("scan.json")         # metadata only, no pixel data
 data.to_hdf5("scan.h5")           # optional: pip install 'gwyddionpy[hdf5]'
 ```
 

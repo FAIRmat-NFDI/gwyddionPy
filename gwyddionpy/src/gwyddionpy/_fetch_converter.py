@@ -23,7 +23,7 @@ from typing import Optional
 
 from platformdirs import user_cache_dir
 
-from ._errors import ConverterFetchError
+from gwyddionpy._errors import ConverterFetchError
 
 #: Shown once per call rather than at import, so having gwyddionpy
 #: installed does not nag anyone who never uses this route.

@@ -13,8 +13,8 @@ from typing import Dict
 import gwyfile
 import numpy as np
 
-from ._errors import UnsupportedFormatError
-from ._model import Channel, GwyData
+from gwyddionpy._errors import UnsupportedFormatError
+from gwyddionpy._model import Channel, GwyData
 
 _DATA_KEY = re.compile(r"^/(?P<num>\d+)/data$")
 

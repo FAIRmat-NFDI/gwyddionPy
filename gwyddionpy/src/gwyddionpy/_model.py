@@ -43,15 +43,27 @@ class GwyData:
         Metadata keys unfold into nested groups by default. Pass
         ``hierarchical_meta=False`` for flat attributes instead.
         """
-        from .export.hdf5 import write
+        from gwyddionpy.export.hdf5 import write
 
         write(self, path, **kwargs)
 
     def to_gwy(self, path) -> None:
         """Write a Gwyddion-native .gwy file, which opens in Gwyddion."""
-        from .export.gwy import write
+        from gwyddionpy.export.gwy import write
 
         write(self, path)
+
+    def to_json(self, path, **kwargs) -> None:
+        """Write channel metadata to a JSON file. Carries no pixel data.
+
+        The layout of ``to_dict``, with each channel's ``data`` array
+        replaced by its ``shape``. Metadata keys unfold into nested objects
+        by default; pass ``hierarchical_meta=False`` for the flat vendor
+        keys instead.
+        """
+        from gwyddionpy.export.json import write
+
+        write(self, path, **kwargs)
 
     def to_dict(self, hierarchical_meta: bool = True) -> dict:
         """Return channels and metadata as a plain dict, with no file I/O.
@@ -59,6 +71,6 @@ class GwyData:
         Structurally mirrors ``to_hdf5``. Downstream readers such as
         pynxtools-spm consume this shape, so keep the two in step.
         """
-        from .export.dict import to_dict
+        from gwyddionpy.export.dict import to_dict
 
         return to_dict(self, hierarchical_meta=hierarchical_meta)

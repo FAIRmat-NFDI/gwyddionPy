@@ -11,17 +11,17 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Optional
 
-from ._errors import (
+from gwyddionpy._errors import (
     ConversionError,
     ConverterFetchError,
     ConverterNotFoundError,
     GwyddionPyError,
     UnsupportedFormatError,
 )
-from ._fetch_converter import ensure_converter
-from ._model import Channel, GwyData
-from ._parse import parse_gwy
-from ._run import query_formats, run_converter
+from gwyddionpy._fetch_converter import ensure_converter
+from gwyddionpy._model import Channel, GwyData
+from gwyddionpy._parse import parse_gwy
+from gwyddionpy._run import query_formats, run_converter
 
 try:
     __version__ = version("gwyddionpy")

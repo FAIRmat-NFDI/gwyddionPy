@@ -8,8 +8,8 @@ scalar datasets; ``False`` leaves flat string attributes. Mirrors
 """
 from __future__ import annotations
 
-from .._metatree import MetaLeaf, build_tree
-from . import channel_keys
+from gwyddionpy._metatree import MetaLeaf, build_tree
+from gwyddionpy.export import channel_keys
 
 
 def _write_tree(group, tree):
