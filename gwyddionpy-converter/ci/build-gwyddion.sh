@@ -9,23 +9,30 @@
 # `gwyddion`, not `libgwyddion20-dev`, so a -dev-only install yields a
 # converter that runs and reports zero formats.
 #
-# Inputs (all optional, via environment): GWYDDION_VERSION, WORK_DIR,
-# PREFIX, GWYCONVERT_OUT, CC.
+# Which Gwyddion release is built comes from `gwyddion-version` under
+# [tool.gwyconvert] in ../pyproject.toml, so one edit there reaches every
+# build. GWYDDION_VERSION in the environment overrides it for a one-off.
+#
+# Other inputs (all optional, via environment): WORK_DIR, PREFIX,
+# GWYCONVERT_OUT, CC.
 #
 # Leaves everything under $PREFIX; cleanup is the caller's job. Gwyddion
 # compiles its module search path in at build time, so that path is valid
 # only while $PREFIX exists. Every caller must therefore run a bundle-*.sh
 # afterwards to copy lib/gwyddion/ somewhere permanent.
-#
-# Upstream releases: https://sourceforge.net/projects/gwyddion/files/gwyddion/
 set -euo pipefail
 
-GWYDDION_VERSION="${GWYDDION_VERSION:-2.71}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONVERTER_SRC="$SCRIPT_DIR/../gwyconvert.c"
+
+# gwyddion-version.sh reads the pin and fails loudly if the key is gone, so
+# an empty version can never reach the download URL below and turn into an
+# unrecognisable 404 halfway through the job.
+GWYDDION_VERSION="${GWYDDION_VERSION:-$("$SCRIPT_DIR/gwyddion-version.sh")}"
+
 WORK_DIR="${WORK_DIR:-$(mktemp -d)}"
 PREFIX="${PREFIX:-$WORK_DIR/install}"
 GWYCONVERT_OUT="${GWYCONVERT_OUT:-$WORK_DIR/gwyconvert}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONVERTER_SRC="$SCRIPT_DIR/../gwyconvert.c"
 
 mkdir -p "$WORK_DIR" "$(dirname "$GWYCONVERT_OUT")"
 

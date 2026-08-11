@@ -35,6 +35,35 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libgwyddion20-dev gwyddion libgtk2.0-dev libfftw3-dev pkg-config build-essential
 
+      # This job is the one place that deliberately does NOT use the pinned
+      # Gwyddion from [tool.gwyconvert] in gwyddionpy-converter/pyproject.toml.
+      # Its whole purpose is the distribution-package route, so it has to
+      # test whatever Gwyddion the distribution ships: apt cannot install
+      # the pinned release, which is not in the archive, and building it
+      # from source here would make this job a copy of
+      # pytest-source-tarball. Every other job — the wheels, the release
+      # tarball, pytest-source-tarball — uses the pin.
+      #
+      # So the version is recorded rather than pinned, and a floor guards
+      # the bottom. Gwyddion 2.60 reports 163 file formats, under the >= 170
+      # the suite asserts, so an image that far back would fail later and
+      # far less legibly than it does here.
+      - name: Record the system Gwyddion version
+        run: |
+          MINIMUM=2.61
+          SYSTEM="$(dpkg-query -W -f='${Version}' gwyddion)"
+          PINNED="$(gwyddionpy-converter/ci/gwyddion-version.sh)"
+          echo "system package: gwyddion $SYSTEM"
+          echo "built from source elsewhere: gwyddion $PINNED"
+          echo "gwyddion $SYSTEM (system package; source builds pin $PINNED)" \
+            >> "$GITHUB_STEP_SUMMARY"
+          # dpkg's own comparison, so epochs and -1build3 suffixes order the
+          # way the archive means them to.
+          if ! dpkg --compare-versions "$SYSTEM" ge "$MINIMUM"; then
+            echo "::error::the packaged Gwyddion is $SYSTEM, below the $MINIMUM floor this job requires" >&2
+            exit 1
+          fi
+
       # The locale tests show the reader is independent of the machine's
       # number formatting, and need a comma-decimal locale to compare
       # against. The runner image ships only C and English ones, so one is

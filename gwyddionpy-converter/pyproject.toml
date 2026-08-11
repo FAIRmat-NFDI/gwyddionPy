@@ -30,6 +30,23 @@ classifiers = [
 "Homepage" = "https://github.com/FAIRmat-NFDI/gwyddionPy"
 "Parent Project" = "https://github.com/FAIRmat-NFDI"
 
+# Settings this project's own build scripts read. A [tool.*] table the build
+# backend does not recognise is ignored, which is what makes this a safe
+# place to keep them.
+[tool.gwyconvert]
+# The Gwyddion release every shipped artifact is built from — wheels,
+# release tarball, and the source-tarball test job alike. The single source
+# of truth: ci/build-gwyddion.sh reads this value, so changing it here
+# changes every build. GWYDDION_VERSION in the environment still overrides
+# it for a one-off local build.
+#
+# Not used by pytest.yml's `pytest-system-package` job, which deliberately
+# tests whatever Gwyddion the distribution packages; see the comment there.
+#
+# Upstream releases:
+# https://sourceforge.net/projects/gwyddion/files/gwyddion/
+gwyddion-version = "2.71"
+
 [tool.setuptools]
 include-package-data = true
 

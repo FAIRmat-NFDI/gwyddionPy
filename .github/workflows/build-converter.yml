@@ -57,6 +57,12 @@ jobs:
       # covers everything that decides what ends up in the wheel, so a push
       # touching only tests or docs reuses the wheels.
       #
+      # This workflow file is in the key too: it pins the runner images and
+      # the cibuildwheel version, so a bump to either changes the wheel
+      # without touching any file under gwyddionpy-converter/. The pinned
+      # Gwyddion release needs no entry of its own — it lives under
+      # [tool.gwyconvert] in pyproject.toml, which is already listed.
+      #
       # Restored before the build steps rather than beside them, because on
       # Windows the costly part is staging the bundle under MSYS2, which
       # happens before cibuildwheel runs.
@@ -77,7 +83,8 @@ jobs:
               'gwyddionpy-converter/Makefile',
               'gwyddionpy-converter/setup.py',
               'gwyddionpy-converter/pyproject.toml',
-              'gwyddionpy-converter/MANIFEST.in') }}
+              'gwyddionpy-converter/MANIFEST.in',
+              '.github/workflows/build-converter.yml') }}
 
       # Windows only: the Gwyddion build needs a real MSYS2 MinGW64 shell,
       # which cibuildwheel's cmd-based hooks cannot provide. The bundle is
