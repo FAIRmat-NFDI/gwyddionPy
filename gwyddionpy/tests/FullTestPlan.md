@@ -1,9 +1,9 @@
 # Test plan — gwyddionpy / gwyddionpy-converter
 
-**Where things stand:** 496 tests. 474 pass, 20 are skipped on purpose, 2 are
+**Where things stand:** 529 tests. 505 pass, 22 are skipped on purpose, 2 are
 marked as known failures in a library we depend on. Everything planned is
 built except §2.2 (more vendor files), which needs sample files rather than
-code.
+code and is now partly under way.
 
 **Why this document exists.** The suite is large, and a lot of it exists
 because of a specific bug rather than a general principle. This file records
@@ -67,7 +67,7 @@ you only want the behaviour.
 | `converter/test_fetch_converter.py` | The old download route, kept but deprecated (see below) |
 | `formats/test_sanity.py` | Broad checks true of any correct reading, so a newly added file is covered immediately |
 | `formats/test_reference.py` | **§2.1** Each measurement compared field by field against a stored reference |
-| `formats/test_vendor_header.py` | The Bruker reference checked against the raw file's own header, so it is not just confirming itself |
+| `formats/test_vendor_header.py` | The two Bruker references checked against the raw files' own headers, so they are not just confirming themselves |
 | `formats/test_export_chain.py` | **§2.3** Real measurements carried through every export unchanged |
 | `gwyddionpy-converter/tests/test_packaging.py` | **§2.10** The installed wheel: the binary is where the package says, and runs |
 
@@ -119,16 +119,37 @@ future readings against that record.
   through those helpers, so they are exercised directly.
 - **The reference is not allowed to confirm itself.** A reference captured
   from a conversion only proves the converter still agrees with its past
-  self. For the Bruker file, the scan geometry is also read straight out of
-  the raw file's own text header (`\Scan Size: 20000 nm`, `\Samps/line: 512`,
-  `\Lines: 512`) and compared. It matches exactly.
+  self. Two files are also read straight out of their own text headers and
+  compared:
+  - **Bruker NanoScope** — scan geometry (`\Scan Size: 20000 nm`,
+    `\Samps/line: 512`, `\Lines: 512`). Matches exactly.
+  - **Bruker SPMLab `.FLT`** — geometry (`ScanRangeX/Y=1.0000 µm`,
+    `ResolutionX/Y=512`), and then the whole array. The header states
+    `DataOffset`, the resolution and `ZTransferCoefficient=0.7731 µm/V`;
+    reading the float32 block ourselves and applying that coefficient
+    reproduces all 262144 values bit-for-bit. This is the strongest check in
+    the suite: it rests on the raw bytes rather than on a past conversion,
+    and it covers every pixel rather than the seven the reference samples.
+    Three things it pins that nothing else would:
+    - the **z calibration**, against the vendor's own coefficient;
+    - the **row order** — the block is stored bottom row first and the
+      converter turns it the right way up. A reference captured from a
+      flipped reading would look perfectly self-consistent for ever;
+    - the **shape**, from the file's length: `DataOffset` plus
+      rows x columns x 4 lands exactly on the end of the file.
 - **Still open:** JPK, WSxM, Igor and Nanonis have no readable text header,
   so their references rest on the captured reading alone. Confirming them
   needs someone with the instrument, or a second independent reader.
 
-### 2.2 More vendors and formats — **the one thing not done**
+### 2.2 More vendors and formats — **still the thinnest area**
 
-The converter reads 170+ formats; five vendors have a real file here.
+The converter reads 170+ formats; five vendors and six files are here.
+
+Most recent addition: `bruker_spmlab/…​.FLT`, a Dimension Edge measurement in
+SPMLab floating-point format. It is the first case of **one vendor in two
+formats handled by two different modules** (`nanoscope` and `spmlabf`) —
+which is exactly the "more than one file per vendor" point below, and it
+arrived with a header complete enough to verify the reading end to end.
 
 - Add files under `tests/data/<vendor>/` and an entry in the `SPECIMENS`
   registry. Prioritise formats NOMAD users actually bring.
@@ -635,7 +656,7 @@ gwyddionpy/tests/
       platforms.py      which platform this is, and what it can do
       requirements.py   a measurement is present and unaltered
   data/                 raw files and their references, by vendor
-      bruker_nanoscope/  jpk/  wsxm/  igor_asylum/  nanonis/
+      bruker_nanoscope/  bruker_spmlab/  jpk/  wsxm/  igor_asylum/  nanonis/
   unit/                 parsing, model and exports on built inputs
   converter/            finding and running the converter
   formats/              reading the real measurements

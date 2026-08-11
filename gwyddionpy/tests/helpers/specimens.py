@@ -65,6 +65,22 @@ SPECIMENS: List[Specimen] = [
         header_checks={"xreal": 20000e-9, "yreal": 20000e-9, "shape": (512, 512)},
     ),
     Specimen(
+        relpath="bruker_spmlab/B3320_13_061726074638.SIG_TOPO_BKW.FLT",
+        vendor="Bruker SPMLab",
+        module="spmlabf",
+        channels=1,
+        sha256="bae4c2db60ef594f74b7f699b93bd20d087aba6aef0e014a76adec9d1f990b6d",
+        notes="Dimension Edge; single backward-scan topography channel. "
+              "Second Bruker format, read by a different module than the "
+              "NanoScope file. INI-style plain-text header, so both its "
+              "geometry and its z calibration can be read independently of "
+              "the converter. Header units are Latin-1 (µ is one byte, 0xB5)",
+        # Straight from the file's own header lines:
+        #   ScanRangeX=1.0000 µm   ScanRangeY=1.0000 µm
+        #   ResolutionX=512        ResolutionY=512
+        header_checks={"xreal": 1.0e-6, "yreal": 1.0e-6, "shape": (512, 512)},
+    ),
+    Specimen(
         relpath="jpk/sample_0.jpk",
         vendor="JPK",
         module="jpkscan",
