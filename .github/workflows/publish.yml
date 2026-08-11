@@ -1,4 +1,4 @@
-name: Publish wheels to TestPyPI
+name: Publish wheels to PyPI
 
 # Publishes both packages — gwyddionpy (Apache-2.0, pure Python) and
 # gwyddionpy-converter (GPL-2.0-or-later, prebuilt binaries) — from one
@@ -121,8 +121,7 @@ jobs:
           path: dist/
 
   publish-python-wheel:
-    # TODO: Use PyPI in production
-    name: Upload gwyddionpy to TestPyPI
+    name: Upload gwyddionpy to PyPI
     # Ordering is load-bearing: gwyddionpy publishes after the converter,
     # never in parallel. Its pin hard-requires the converter from this tag,
     # so a converter upload that failed while this one succeeded would ship
@@ -133,8 +132,8 @@ jobs:
     needs: [build-python-wheel, publish-converter-wheel]
     runs-on: ubuntu-latest
     environment:
-      name: testpypi
-      url: https://test.pypi.org/p/gwyddionpy
+      name: pypi
+      url: https://pypi.org/p/gwyddionpy
     permissions:
       # PyPI Trusted Publishing (OIDC) — no API token stored anywhere.
       # https://docs.pypi.org/trusted-publishers/
@@ -146,10 +145,10 @@ jobs:
           name: dist-artifacts
           path: dist/
 
-      - name: Publish package distributions to TestPyPI
+      # No repository-url: the action uploads to PyPI by default.
+      - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: https://test.pypi.org/legacy/
           skip-existing: true
 
   publish-converter-wheel:
@@ -160,8 +159,8 @@ jobs:
     needs: build-converter
     runs-on: ubuntu-latest
     environment:
-      name: testpypi-converter
-      url: https://test.pypi.org/p/gwyddionpy-converter
+      name: pypi-converter
+      url: https://pypi.org/p/gwyddionpy-converter
     permissions:
       # PyPI Trusted Publishing (OIDC) — no API token stored anywhere.
       # https://docs.pypi.org/trusted-publishers/
@@ -188,8 +187,8 @@ jobs:
           fi
           echo "$count wheel(s) ready"
 
-      - name: Publish package distributions to TestPyPI
+      # No repository-url: the action uploads to PyPI by default.
+      - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: https://test.pypi.org/legacy/
           skip-existing: true

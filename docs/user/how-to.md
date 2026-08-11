@@ -18,11 +18,6 @@ separately. There are three ways to get the binary:
 All three end with the same working install. Option 1 unless you have a
 reason to prefer another.
 
-> **TestPyPI note.** Both packages are published to TestPyPI only for now,
-> so every install command below carries index flags pointing there, with
-> real PyPI as the fallback for the dependencies. Drop those flags once the
-> packages reach production PyPI.
-
 ## Which package do I install?
 
 Three names come up, and only two of them are actual packages:
@@ -89,17 +84,13 @@ itself — but it does mean a bare `python` is the right one afterwards.
 **With `uv`:**
 
 ```bash
-uv pip install --default-index https://test.pypi.org/simple \
-               --index https://pypi.org/simple \
-               "gwyddionpy[converter]"
+uv pip install "gwyddionpy[converter]"
 ```
 
 **With `pip`:**
 
 ```bash
-pip install -i https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            "gwyddionpy[converter]"
+pip install "gwyddionpy[converter]"
 ```
 
 That is all. The `[converter]` extra pulls `gwyddionpy-converter`, which
@@ -114,13 +105,6 @@ The extra is opt-in on purpose: a plain `pip install gwyddionpy` stays
 entirely Apache-2.0, so requesting the GPL binary is always your explicit
 choice.
 
-> **A note on the index flags.** `pip`'s `-i` and `uv`'s `--default-index`
-> both mean "look here first"; `--extra-index-url` and `uv`'s `--index` add
-> PyPI for the dependencies (numpy, gwyfile, platformdirs), which are not on
-> TestPyPI. Working on the package itself from inside `gwyddionpy/`, `uv`
-> picks both indexes up from the `[tool.uv]` table in its `pyproject.toml`
-> and you can drop the flags.
-
 ## Option 2 — a prebuilt binary from a GitHub Release (deprecated)
 
 > **Deprecated.** This route still works and is still tested, but it will
@@ -133,11 +117,7 @@ Useful when you want the binary without a GPL package in your environment.
 With an environment already [set up](#setting-up-an-environment):
 
 ```bash
-pip install -i https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            gwyddionpy
-# uv: uv pip install --default-index https://test.pypi.org/simple \
-#                    --index https://pypi.org/simple gwyddionpy
+pip install gwyddionpy      # uv: uv pip install gwyddionpy
 
 gwyddionpy-fetch-converter
 ```
@@ -178,9 +158,7 @@ make -C gwyddionpy-converter
 # 3. A Python environment with the gwyddionpy package
 python3 -m venv .venv          # or: uv venv
 source .venv/bin/activate
-pip install -i https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            gwyddionpy
+pip install gwyddionpy
 
 # 4. Point gwyddionpy at the binary you just built
 export GWYDDIONPY_CONVERT=$PWD/gwyddionpy-converter/gwyconvert

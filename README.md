@@ -37,17 +37,11 @@ uv venv && source .venv/bin/activate                    # uv
 python3 -m venv .venv && source .venv/bin/activate      # or venv + pip
 ```
 
-Install both halves. Both packages are on **TestPyPI** only for now, hence
-the index flags:
+Install both halves:
 
 ```bash
-# uv
-uv pip install --default-index https://test.pypi.org/simple \
-               --index https://pypi.org/simple "gwyddionpy[converter]"
-
-# pip
-pip install -i https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ "gwyddionpy[converter]"
+uv pip install "gwyddionpy[converter]"      # uv
+pip install "gwyddionpy[converter]"         # or pip
 ```
 
 Check it:
