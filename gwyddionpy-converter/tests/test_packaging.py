@@ -111,18 +111,28 @@ def test_the_package_declares_its_licence():
     assert "GPL" in declared.upper(), f"no GPL statement in: {declared[:200]}"
 
 
-#: What a shared library is called in the bundle. Linux puts the version in
-#: the file name (libgwyddion2.so.0) and macOS does not
-#: (libgwyddion2.0.dylib), so both spellings are matched.
-LIBRARY_PATTERNS = ("lib/*.so", "lib/*.so.*", "lib/*.dylib")
+#: Where the bundle's own libraries sit, relative to the directory holding
+#: the converter, and what they are called there.
+#:
+#: Linux and macOS reach the payload through a wrapper script and keep the
+#: libraries in a lib/ subdirectory; Linux puts the version in the file name
+#: (libgwyddion2.so.0) and macOS does not (libgwyddion2.0.dylib), so both
+#: spellings are matched. Windows has no wrapper: the loader searches the
+#: executable's own directory, so ci/bundle-windows.sh puts the dynamic-link
+#: libraries (DLLs) straight beside gwyconvert.exe.
+LIBRARY_PATTERNS = {
+    "nt": ("*.dll",),
+    "posix": ("lib/*.so", "lib/*.so.*", "lib/*.dylib"),
+}[os.name]
 
 
 def test_the_bundle_carries_its_own_libraries(binary):
     """The bundle ships Gwyddion and its dependencies beside the binary,
-    which is what lets it run on a machine with no Gwyddion installed."""
-    if binary.read_bytes()[:2] != b"#!":
-        pytest.skip("no wrapper script on this platform")
+    which is what lets it run on a machine with no Gwyddion installed.
 
+    Asserted on every platform rather than skipped where the layout differs:
+    a leg that skips this looks exactly like one where the bundle is whole.
+    """
     bundled = [path for pattern in LIBRARY_PATTERNS
                for path in binary.parent.glob(pattern)]
     assert bundled, f"no bundled libraries beside {binary}"

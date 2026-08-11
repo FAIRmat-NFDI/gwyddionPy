@@ -175,6 +175,18 @@ jobs:
           export OUT_DIR="$GITHUB_WORKSPACE/dist-converter"
           gwyddionpy-converter/ci/build-linux.sh
 
+      # Outside a release the tarball was built and thrown away. Kept as an
+      # artifact so pytest.yml can point GWYDDIONPY_ALT_CONVERT at it: it is
+      # a genuinely independent build of the same sources — Rocky 8 and
+      # build-linux.sh here, manylinux_2_28 and cibuildwheel for the wheel —
+      # which is what makes comparing the two readings worth anything. It is
+      # also the only test the released tarball itself gets.
+      - name: Upload the tarball as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gwyconvert-tarball-linux-x86_64
+          path: dist-converter/gwyconvert-linux-x86_64.tar.gz
+
       - name: Upload to the release
         # Gated on `inputs.tag`, not event_name: a called workflow sees the
         # caller's event name, so it cannot tell the two entry points apart.

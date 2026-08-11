@@ -188,6 +188,15 @@ jobs:
 
       # A comma-decimal locale is generated on Linux because the locale
       # tests prove independence from it, and cannot do so if none exists.
+      #
+      # Nothing is generated for the other two, for different reasons.
+      # Windows ignores LC_ALL, so those tests skip there by design and the
+      # guarantee is covered instead by gwyconvert's own setlocale call.
+      # macOS ships the candidates in tests/converter/test_locale.py
+      # already, so the tests run on an image-provided locale rather than
+      # one this job created — an undeclared dependency on the image, but a
+      # loud one: the fixture calls pytest.fail, never skip, if no
+      # comma-decimal locale can be found.
       - name: Generate a comma-decimal locale (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -200,6 +209,29 @@ jobs:
         with:
           name: cibw-wheels-${{ matrix.os }}
           path: wheelhouse
+
+      # A second, independently built converter, so
+      # test_build_consistency.py's two-build comparison runs instead of
+      # skipping — eight tests that had never executed anywhere. It is the
+      # tarball from build-converter.yml's `linux` job: same sources, other
+      # container and toolchain, which is the difference worth comparing.
+      #
+      # Linux only, because that job builds a tarball for no other platform.
+      # This sets no GWYDDIONPY_CONVERT, so the converter under test is
+      # still the installed wheel and the tarball is only ever the second
+      # opinion.
+      - name: Collect the independently built tarball (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/download-artifact@v4
+        with:
+          name: gwyconvert-tarball-linux-x86_64
+          path: alt-converter
+
+      - name: Offer it to the suite as a second build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          tar xzf alt-converter/gwyconvert-linux-x86_64.tar.gz -C alt-converter
+          echo "GWYDDIONPY_ALT_CONVERT=$PWD/alt-converter/gwyconvert" >> "$GITHUB_ENV"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
