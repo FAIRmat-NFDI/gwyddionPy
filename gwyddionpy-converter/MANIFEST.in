@@ -1,0 +1,8 @@
+# The bundle staged by ci/bundle-*.sh: executable (or wrapper) plus its
+# relocated libraries.
+recursive-include src/gwyddionpy_converter/bin *
+# Windows only. Gwyddion's Win32 module lookup resolves plugins at
+# <package>/lib/gwyddion/modules — a SIBLING of bin/, not inside it; see
+# the layout note in ci/bundle-windows.sh. Empty on Linux and macOS, where
+# the modules live under bin/.
+recursive-include src/gwyddionpy_converter/lib *

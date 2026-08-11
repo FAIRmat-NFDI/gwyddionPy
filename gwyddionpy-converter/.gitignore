@@ -1,0 +1,5 @@
+# Populated only at CI build time, extracted from build-converter.yml's
+# release asset — never committed.
+src/gwyddionpy_converter/bin/
+dist/
+*.egg-info/

@@ -1,0 +1,99 @@
+name: pytest
+
+on:
+  push:
+    branches: [main, "*"]
+  # pull_request:
+  #   branches: [main]
+
+jobs:
+  # Two independent jobs (no `needs:` between them) covering the two ways a
+  # developer can obtain gwyconvert. Both are kept: pytest-source-tarball
+  # exercises the recipe released artifacts are built from
+  # (gwyddionpy-converter/ci/build-gwyddion.sh), while pytest-system-package
+  # exercises the distro-package route contributors actually reach for
+  # locally, which nothing else would catch if it broke.
+
+  pytest-system-package:
+    name: pytest (system Gwyddion package)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # `gwyddion` itself is required, not just libgwyddion20-dev: Debian
+      # and Ubuntu ship the file-format module plugins (~170 .so files that
+      # gwyconvert dlopen()s at runtime) in the `gwyddion` binary package,
+      # while the -dev package carries only headers and link libraries.
+      # Omit it and gwyconvert builds, links and runs — reporting zero
+      # formats. Keep this list in sync with docs/user/how-to.md.
+      - name: Install Gwyddion (system package)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgwyddion20-dev gwyddion libgtk2.0-dev libfftw3-dev pkg-config build-essential
+
+      - name: Build gwyconvert
+        run: |
+          make -C gwyddionpy-converter
+          make -C gwyddionpy-converter check
+
+      - name: Install uv and set the python version to ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install gwyddionpy
+        run: uv pip install "./gwyddionpy[test]"
+
+      - name: Test with pytest
+        env:
+          GWYDDIONPY_CONVERT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
+        run: pytest gwyddionpy/tests
+
+  pytest-source-tarball:
+    name: pytest (Gwyddion built from source tarball)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build dependencies only — Gwyddion itself is built from its official
+      # source tarball by ci/build-gwyddion.sh, the same script
+      # build-converter.yml uses. Testing against that rather than the
+      # distro package means this job matches what actually ships, and does
+      # not depend on how a distribution happens to split its Gwyddion
+      # packages (the exact assumption the job above documents).
+      - name: Install build dependencies for Gwyddion
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config curl libgtk2.0-dev libfftw3-dev libxml2-dev gettext
+
+      - name: Build Gwyddion + gwyconvert from source
+        env:
+          WORK_DIR: ${{ github.workspace }}/gwyddion-build
+          PREFIX: ${{ github.workspace }}/gwyddion-build/install
+          GWYCONVERT_OUT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
+        run: gwyddionpy-converter/ci/build-gwyddion.sh
+
+      - name: Install uv and set the python version to ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install gwyddionpy
+        run: uv pip install "./gwyddionpy[test]"
+
+      - name: Test with pytest
+        env:
+          GWYDDIONPY_CONVERT: ${{ github.workspace }}/gwyddionpy-converter/gwyconvert
+        run: pytest gwyddionpy/tests

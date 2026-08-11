@@ -1,0 +1,116 @@
+[build-system]
+requires = ["setuptools>=78.1.1", "setuptools-scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gwyddionpy"
+dynamic = ["version"]
+authors = [
+    { name = "The NOMAD Authors" },
+]
+description = "Read any Gwyddion-supported SPM raw file into NumPy via the gwyconvert helper"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy>=1.22",
+    "gwyfile>=0.3",
+    "platformdirs>=3.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/FAIRmat-NFDI/gwyddionPy"
+"Parent Project" = "https://github.com/FAIRmat-NFDI"
+
+[project.scripts]
+gwyddionpy-fetch-converter = "gwyddionpy._fetch_converter:_main"
+
+[project.optional-dependencies]
+# The GPL-2.0-or-later converter wheel is an *extra*, never a hard
+# dependency, for two reasons:
+#   1. License firewall. A plain `pip install gwyddionpy` must stay 100%
+#      Apache-2.0 for consumers who cannot take GPL artifacts; requesting
+#      `gwyddionpy[converter]` makes pulling one an explicit choice.
+#   2. Coverage. The converter ships wheels for Linux x86_64, macOS
+#      arm64/x86_64 and Windows x86_64, and no sdist — so as a hard
+#      dependency it would break `pip install gwyddionpy` outright on any
+#      other platform (Linux ARM, musl). As an extra, those users still get
+#      gwyddionpy and can supply gwyconvert through _run.py's other
+#      discovery paths: GWYDDIONPY_CONVERT, PATH, or a self-built binary.
+#
+# publish.yml rewrites the line below at release time to pin the exact
+# converter version. Rewording it breaks that step (loudly, by design).
+converter = ["gwyddionpy-converter"]
+hdf5 = ["h5py>=3.0"]
+test = ["pytest>=7", "h5py>=3.0", "pooch>=1.6"]
+dev = [
+    "mypy",
+    "ruff>=0.14.0",
+    "pytest",
+    "pre-commit",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv]
+# gwyddionpy and gwyddionpy-converter are published to TestPyPI so far,
+# while numpy/gwyfile/platformdirs live on real PyPI: index-url is searched
+# first and extra-index-url covers the rest. Drop both when this package
+# moves to production PyPI (gwyddionpy-converter/pyproject.toml too).
+index-url = "https://test.pypi.org/simple"
+extra-index-url = ["https://pypi.org/simple"]
+
+[tool.setuptools_scm]
+root = ".."
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"
+
+[tool.ruff]
+include = ["src/gwyddionpy/*.py", "src/gwyddionpy/**/*.py", "tests/*.py"]
+lint.select = [
+    "E", # pycodestyle
+    "W", # pycodestyle
+    "PL", # pylint
+    "NPY201", # upgrade to numpy>2
+]
+lint.ignore = [
+    "E501", # Line too long ({width} > {limit} characters)
+    "E701", # Multiple statements on one line (colon)
+    "E731", # Do not assign a lambda expression, use a def
+    "E402",  # Module level import not at top of file
+    "PLR0911", # Too many return statements
+    "PLR0912", # Too many branches
+    "PLR0913", # Too many arguments in function definition
+    "PLR0915", # Too many statements
+    "PLR2004", # Magic value used instead of constant
+    "PLW0603", # Using the global statement
+    "PLW2901", # redefined-loop-name
+    "PLR1714", # consider-using-in
+    "PLR5501", # else-if-used
+    "PLC0415", # import outside-toplevel
+]
+lint.fixable = ["ALL"]
+
+[tool.mypy]
+strict = false
+ignore_missing_imports = true
+follow_imports = "silent"
+no_strict_optional = true
+disable_error_code = "import, annotation-unchecked"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "corpus: tests needing full-size raw files fetched from the corpus host",
+    "converter: tests needing a built gwyconvert binary",
+]
