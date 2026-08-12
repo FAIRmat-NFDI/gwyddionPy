@@ -1,0 +1,15 @@
+# The sdist ships the package and its metadata, not the test suite.
+#
+# setuptools-scm's file finder adds every git-tracked file under the project
+# to the sdist, and tests/data/ is 31 MB of vendor measurement files. That is
+# how the 0.0.18 sdist reached 11 MB against a 28 KB wheel — 417x the wheel,
+# none of it code, carried by everyone who builds from source and stored on
+# PyPI for ever, since a released file can be yanked but never replaced.
+#
+# Pruning all of tests/ rather than only tests/data/: the suite is built to
+# fail, never skip, when a specimen is missing (tests/helpers/requirements.py
+# — a run that passed without the real vendor files would report nothing).
+# Shipping the tests without their data would therefore hand anyone who ran
+# them a suite that fails by design. The tests live in git, which is where
+# they are run from.
+prune tests
