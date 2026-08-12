@@ -76,6 +76,26 @@ only) and building it yourself against a local Gwyddion.
 Converter wheels exist for Linux x86_64, macOS (Apple Silicon and Intel) and
 Windows x86_64. Extras: `[converter]`, `[hdf5]`, `[test]`, `[dev]`.
 
+## Tested platforms
+
+`gwyddionpy[converter]` was verified on the following, via
+[`PlatformCompatibility.md`](PlatformCompatibility.md):
+
+| OS | Works |
+|---|---|
+| Arch Linux (rolling) | ✅ |
+| Ubuntu 26.04 LTS | ✅ |
+| Ubuntu 24.04 LTS | ✅ |
+| Ubuntu 22.04 LTS | ✅ |
+| Ubuntu 20.04 LTS | ❌ |
+| Fedora 44 | ✅ |
+| openSUSE Tumbleweed | ✅ |
+| Debian 13 (trixie) | ✅ |
+| Debian 12 (bookworm) | ✅ |
+| AlmaLinux 10.2 | ✅ |
+| AlmaLinux 8 | ✅ |
+| Windows 11 | ✅ |
+
 ## What you get
 
 `load()` detects the format from the file's contents — you never name it —
