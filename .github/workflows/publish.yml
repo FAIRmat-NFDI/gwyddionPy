@@ -159,7 +159,9 @@ jobs:
     needs: build-converter
     runs-on: ubuntu-latest
     environment:
-      name: pypi
+      # Keep pypi-converter as it is set in PyPI project settings, to get different token for 
+      # gwyddionpy and gwyddionpy-converter. Otherwise, the same token would be used for both projects.
+      name: pypi-converter
       url: https://pypi.org/p/gwyddionpy-converter
     permissions:
       # PyPI Trusted Publishing (OIDC) — no API token stored anywhere.
