@@ -1,32 +1,17 @@
 # gwyddionPy
 
-Read any raw scanning probe microscopy (SPM) file that
+gwyddionPy reads any raw scanning probe microscopy (SPM) file that
 [Gwyddion](http://gwyddion.net) supports — around 170 vendor formats — into
 Python as NumPy arrays plus metadata dictionaries. Usable as a library
-dependency and for NOMAD/FAIRmat data ingestion.
+dependency in any Python software.
 
-```python
-import gwyddionpy
-
-data = gwyddionpy.load("scan.spm")         # Bruker, JPK, WSxM, Igor, ...
-data.channels["Height"].data              # numpy array, physical values
-data.channels["Height"].si_unit_z         # "m"
-data.metadata                             # vendor metadata dict
-data.to_json("scan.json")                 # metadata only, no pixel data
-data.to_hdf5("scan.h5")                   # hierarchical HDF5 export
-data.to_gwy("scan.gwy")                   # back to Gwyddion-native format
-```
 
 ## How it works
 
-A small headless C helper, `gwyconvert` (in `gwyddionpy-converter/`), links
-Gwyddion's libraries and converts any supported raw file to Gwyddion's
+`gwyconvert` (in `gwyddionpy-converter/`) is a C helper without a graphical user interface that links Gwyddion's libraries and converts any supported raw file to Gwyddion's
 native `.gwy` format. The pure-Python package `gwyddionpy` (in
 `gwyddionpy/`) runs it as a subprocess and parses the result into NumPy.
 
-There is no compiled Python extension anywhere, so a new Python release
-cannot break the package. That subprocess boundary is also the license
-boundary — see [License](#license).
 
 ## Quick start
 
@@ -44,7 +29,7 @@ uv pip install "gwyddionpy[converter]"      # uv
 pip install "gwyddionpy[converter]"         # or pip
 ```
 
-Check it:
+### Check it:
 
 ```bash
 python3 -c "import gwyddionpy; print(len(gwyddionpy.list_formats()), 'formats')"
@@ -54,6 +39,21 @@ python3 -c "import gwyddionpy; print(len(gwyddionpy.list_formats()), 'formats')"
 Zero formats means the converter cannot find Gwyddion's plugins;
 `ConverterNotFoundError` means no binary was found at all. Both are covered
 in [how-to.md](docs/user/how-to.md#verify).
+
+### Load a file
+
+```python
+import gwyddionpy
+
+file = "path-to-file/example_file.flt"  # Bruker, JPK, WSxM, Igor, ...
+data = gwyddionpy.load(file)
+data.channels["Height"].data              # numpy array, physical values
+data.channels["Height"].si_unit_z         # "m"
+data.metadata                             # vendor metadata dict
+data.to_json("scan.json")                 # metadata only, no pixel data
+data.to_hdf5("scan.h5")                   # hierarchical HDF5 export
+data.to_gwy("scan.gwy")                   # back to Gwyddion-native format
+```
 
 ## Which package do I install?
 
