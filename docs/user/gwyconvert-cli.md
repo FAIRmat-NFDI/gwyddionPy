@@ -134,14 +134,6 @@ then chooses the exception by looking for the phrase `cannot load` in
 stderr: present means `UnsupportedFormatError`, absent means the more
 general `ConversionError`.
 
-> **Known weakness.** That matches on diagnostic *text*, not on the exit
-> code. Rewording the `cannot load` message in `gwyconvert.c` would quietly
-> reclassify every unsupported file as a generic `ConversionError`. The exit
-> code cannot replace the check outright, since `1` covers unreadable input
-> and unwritable output alike, but it could carry the part it does know:
-> exit `2` means gwyddionpy built the command wrongly, which is a bug in
-> gwyddionpy rather than anything about the user's file.
-
 ## Where this is enforced
 
 [`gwyddionpy/tests/converter/test_cli_contract.py`](../../gwyddionpy/tests/converter/test_cli_contract.py)
