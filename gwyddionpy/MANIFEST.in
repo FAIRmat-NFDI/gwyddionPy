@@ -13,3 +13,4 @@
 # them a suite that fails by design. The tests live in git, which is where
 # they are run from.
 prune tests
+prune recipe
