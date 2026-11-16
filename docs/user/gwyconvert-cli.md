@@ -76,10 +76,8 @@ gwyconvert: cannot write 'missing-directory/out.gwy': Cannot open file for writi
 
 ### One caveat about stderr
 
-Older bundles are noisy. GTK tries to load its accessibility modules and
-GdkPixbuf looks for a loader cache at the path baked in by the build
-container, producing several warnings on *every* run, successful ones
-included:
+A `gwyconvert` that does not come from the bundled wheel can print GTK and
+GdkPixbuf warnings on every run, even successful ones:
 
 ```
 Gtk-Message: Failed to load module "gail"
@@ -87,10 +85,9 @@ Gtk-Message: Failed to load module "gail"
 file '/usr/lib64/gdk-pixbuf-2.0/2.10.0/loaders.cache': No such file...
 ```
 
-None of it is a real diagnostic: `gwyconvert` draws nothing and the bundle
-ships no pixmap module. Bundles built after this was fixed clear the two
-variables in the wrapper script. If you are on an older bundle, or calling
-the binary in an unusual environment, you can silence it yourself:
+These are not real errors, because `gwyconvert` draws nothing. The bundled
+wheel clears the two variables below in its wrapper script. In other setups
+you can silence the warnings yourself:
 
 ```bash
 GTK_MODULES= GDK_PIXBUF_MODULE_FILE=/dev/null gwyconvert scan.spm scan.gwy
