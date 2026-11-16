@@ -52,17 +52,39 @@ is_system_lib() {
   esac
 }
 
-# Direct dependencies of one binary, as absolute paths. Skips otool's first
-# line (the filename), the file's own identity entry, and anything already
-# expressed relative to the loader.
+# Direct dependencies of one binary. Skips otool's first line (the filename),
+# the file's own identity entry, and @loader_path/@executable_path entries.
+# @rpath entries are kept: newer Homebrew bottles (e.g. brotli) use them.
 direct_deps() {
   otool -L "$1" | tail -n +2 | awk '{print $1}' | while read -r dep; do
     case "$dep" in
+      @rpath/*) ;;
       @*|"") continue ;;
     esac
     [ "$dep" = "$1" ] && continue
     printf '%s\n' "$dep"
   done
+}
+
+# Folders searched for an @rpath/<lib> dependency: the Gwyddion prefix and
+# Homebrew's lib/, which links every installed library.
+RPATH_DIRS=("$PREFIX/lib")
+if command -v brew >/dev/null 2>&1; then
+  RPATH_DIRS+=("$(brew --prefix)/lib")
+fi
+
+# Turn a dependency into a file on disk. Unresolved @rpath names are
+# returned unchanged, so the "not found" warning below reports them.
+resolve_dep() {
+  case "$1" in
+    @rpath/*)
+      local name="${1#@rpath/}" d
+      for d in "${RPATH_DIRS[@]}"; do
+        if [ -f "$d/$name" ]; then printf '%s\n' "$d/$name"; return; fi
+      done
+      ;;
+  esac
+  printf '%s\n' "$1"
 }
 
 echo "== Resolving the transitive dependency closure =="
@@ -85,8 +107,9 @@ while [ -s "$WORK" ]; do
     base="$(basename "$dep")"
     if ! grep -qxF "$base" "$SEEN" 2>/dev/null; then
       printf '%s\n' "$base" >> "$SEEN"
-      if [ -f "$dep" ]; then
-        cp -f "$dep" "$LIB_DIR/$base"
+      src="$(resolve_dep "$dep")"
+      if [ -f "$src" ]; then
+        cp -f "$src" "$LIB_DIR/$base"
         chmod u+w "$LIB_DIR/$base"
         # Newly copied library may itself pull in more: queue it.
         printf '%s\n' "$LIB_DIR/$base" >> "$WORK"
