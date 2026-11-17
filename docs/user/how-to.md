@@ -179,6 +179,22 @@ the same script this project's continuous integration and release builds
 use. It takes `WORK_DIR`, `PREFIX` and `GWYCONVERT_OUT` from the
 environment and produces a `gwyconvert` linked against its own Gwyddion.
 
+## With conda
+
+The packages are on [Bioconda](https://bioconda.github.io), with
+`gwyconvert` as the converter's package name.
+
+```bash
+conda install -c conda-forge -c bioconda gwyddionpy gwyconvert
+conda activate <your-env>
+```
+
+- **Activate the env** before you use it. gwyddionpy also finds the
+  converter without activation (for example from a Jupyter kernel), but
+  other conda packages may not work that way.
+- **Windows:** Bioconda does not build for Windows. Install the converter
+  with `pip install gwyddionpy-converter` inside the conda env.
+
 ## Verify
 
 ```bash
