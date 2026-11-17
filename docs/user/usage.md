@@ -10,16 +10,15 @@ the same numbers.
 
 ## Contents
 
-- [The one call that matters](#the-one-call-that-matters)
+- [Load a file](#load-a-file)
 - [What you get back](#what-you-get-back)
 - [Export formats](#export-formats)
 - [Working with `.gwy`](#working-with-gwy)
 - [Which formats are supported best](#which-formats-are-supported-best)
 - [Three worked examples](#three-worked-examples)
 - [When something fails](#when-something-fails)
-- [What this buys you as a scientist](#what-this-buys-you-as-a-scientist)
 
-## The one call that matters
+## Load a file
 
 ```python
 import gwyddionpy
@@ -445,36 +444,6 @@ converter that cannot find Gwyddion's format plugins starts and exits
 cleanly, having registered nothing. If you see 0 instead of ~170, the
 installation is at fault, not the file — see
 [how-to.md § Verify](how-to.md#verify).
-
-## What this buys you as a scientist
-
-The unglamorous part of SPM analysis is that every instrument writes its own
-format, and the reader you find for one vendor rarely agrees with the reader
-for the next about units, orientation or what the metadata keys mean.
-Gwyddion has spent two decades absorbing that problem across ~170 formats;
-gwyddionpy is a way to reach it from Python without leaving NumPy.
-
-In practice that means:
-
-- **One code path for a mixed dataset.** Files from four instruments read
-  through the same `load()` and arrive as arrays in SI units, so a roughness
-  or grain analysis written once runs over all of them.
-- **Metadata you can compute with.** `"-2.44 V"` becomes `-2.44` and `"V"`,
-  which is the difference between a value you can filter a dataset on and a
-  string you have to eyeball.
-- **Batch work Gwyddion's GUI is not for.** Hundreds of files, converted,
-  summarised and archived without a window opening.
-- **A path to FAIR archival.** The `to_json()` sidecar and the HDF5 export
-  are structured records of a measurement, and pynxtools-spm consumes the
-  `to_dict()` layout on its way to NeXus.
-- **An exit back to the GUI.** `to_gwy()` means the interactive tools —
-  levelling, grain marking, step-height fitting — stay available for the
-  files that turn out to need a human eye.
-
-What it does not do is analyse anything for you. There is no levelling, no
-plane correction, no grain detection here; those live in Gwyddion itself or
-in whatever you write on top of the arrays. This package's job ends where
-NumPy's begins.
 
 ## See also
 
