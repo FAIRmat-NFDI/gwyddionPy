@@ -43,10 +43,11 @@ tar xf "$WORK_DIR/gwyddion.tar.xz" -C "$WORK_DIR"
 
 # --without-gl drops the OpenGL/GLX/gtkglext dependency outright. gwyconvert
 # uses no 3D widgets, and a released binary has to stay minimal and portable.
-echo "== Configuring (--without-gl) =="
+# The flags are shared with the conda recipe (recipe/build.sh).
+source "$SCRIPT_DIR/gwyddion-configure-flags.sh"
+echo "== Configuring (${GWYDDION_CONFIGURE_FLAGS[*]}) =="
 cd "$WORK_DIR/gwyddion-${GWYDDION_VERSION}"
-./configure --prefix="$PREFIX" --without-gl \
-  --disable-gtk-doc --disable-desktop-file-update
+./configure --prefix="$PREFIX" "${GWYDDION_CONFIGURE_FLAGS[@]}"
 # nproc is GNU coreutils and absent on macOS; sysctl is the BSD equivalent.
 # Fall back to 1 rather than an empty -j (which would be unbounded).
 JOBS="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)"
