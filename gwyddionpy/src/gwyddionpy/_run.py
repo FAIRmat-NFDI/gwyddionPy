@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -87,10 +88,25 @@ def converter_environment() -> dict:
     return env
 
 
+def _find_in_env_prefix(prefix: str) -> Optional[str]:
+    """Look for gwyconvert in the bin folders of a Python env.
+
+    conda installs it there, but adds that folder to PATH only after
+    ``conda activate``, e.g. not for a Jupyter kernel (issue #12).
+    """
+    # Library/bin is where conda puts executables on Windows.
+    for sub in ("bin", os.path.join("Library", "bin")):
+        found = shutil.which(BINARY_NAME, path=os.path.join(prefix, sub))
+        if found:
+            return found
+    return None
+
+
 def find_converter(explicit: Optional[str] = None) -> str:
     """Resolve the gwyconvert binary: the ``explicit`` argument, then
-    ``GWYDDIONPY_CONVERT``, ``PATH``, the installed converter wheel, and
-    finally a binary fetched by ``ensure_converter()``.
+    ``GWYDDIONPY_CONVERT``, ``PATH``, the running env's bin folder (conda),
+    the installed converter wheel, and finally a binary fetched by
+    ``ensure_converter()``.
 
     The first two raise when they point at no file rather than falling
     through, since a wrong override is worth reporting.
@@ -109,6 +125,10 @@ def find_converter(explicit: Optional[str] = None) -> str:
         )
 
     found = shutil.which(BINARY_NAME)
+    if found:
+        return found
+
+    found = _find_in_env_prefix(sys.prefix)
     if found:
         return found
 
