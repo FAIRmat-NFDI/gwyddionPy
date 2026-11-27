@@ -139,7 +139,7 @@ def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
     """Extract, rejecting members that are links or escape ``dest``.
 
     Plain ``extractall()`` writes both as given (CVE-2007-4559). Python
-    3.12's ``filter="data"`` would do this, but the package supports 3.9.
+    ``filter="data"`` would do this, but it only exists from Python 3.11.4.
     https://docs.python.org/3/library/tarfile.html#extraction-filters
     """
     dest = dest.resolve()
