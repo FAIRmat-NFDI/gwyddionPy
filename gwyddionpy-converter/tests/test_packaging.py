@@ -144,5 +144,5 @@ def test_the_bundle_carries_its_own_libraries(binary):
 def test_python_version_independence():
     """Tagged py3-none-<platform>: the payload runs as a subprocess and
     depends on no Python application binary interface (ABI)."""
-    assert sys.version_info >= (3, 9)
+    assert sys.version_info >= (3, 11)
     assert gwyddionpy_converter.binary_path().is_file()

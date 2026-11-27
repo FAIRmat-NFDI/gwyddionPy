@@ -66,7 +66,7 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 ```
 
 `uv venv --python 3.12` pins a specific interpreter, downloading it if it is
-not already on the machine. gwyddionpy needs **Python 3.9 or newer**.
+not already on the machine. gwyddionpy needs **Python 3.11 or newer**.
 
 **With `venv` and `pip`:**
 
